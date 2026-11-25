@@ -41,8 +41,9 @@ CFLAGS=(-target x86-freestanding-none -ffreestanding -fno-stack-protector -fno-p
 "$ZIG" cc "${CFLAGS[@]}" -c "$KERNEL/main.c" -o "$OUT/main.o"
 "$ZIG" cc "${CFLAGS[@]}" -c "$KERNEL/ramfs.c" -o "$OUT/ramfs.o"
 "$ZIG" cc "${CFLAGS[@]}" -c "$KERNEL/disk.c" -o "$OUT/disk.o"
+"$ZIG" cc "${CFLAGS[@]}" -c "$KERNEL/paging.c" -o "$OUT/paging.o"
 
-OBJS=("$OUT/entry.o" "$OUT/idt.o" "$OUT/userland.o" "$OUT/main.o" "$OUT/ramfs.o" "$OUT/disk.o")
+OBJS=("$OUT/entry.o" "$OUT/idt.o" "$OUT/userland.o" "$OUT/main.o" "$OUT/ramfs.o" "$OUT/disk.o" "$OUT/paging.o")
 if command -v ld.lld >/dev/null 2>&1; then
   ld.lld -m elf_i386 -T "$KERNEL/linker.ld" -o "$OUT/kernel.elf" "${OBJS[@]}"
 elif [[ -x "$(dirname "$ZIG")/lld" ]]; then

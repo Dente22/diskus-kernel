@@ -89,8 +89,12 @@ $diskO = Join-Path $Out 'disk.o'
 & $zig cc @cflags -c (Join-Path $Kernel 'disk.c') -o $diskO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$pagingO = Join-Path $Out 'paging.o'
+& $zig cc @cflags -c (Join-Path $Kernel 'paging.c') -o $pagingO
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $kernelElf = Join-Path $Out 'kernel.elf'
-$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO)
+$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO, $pagingO)
 $lld = Join-Path (Split-Path $zig) 'lld.exe'
 if (-not (Test-Path $lld)) {
     $lld = Get-ChildItem (Split-Path $zig) -Filter 'lld.exe' -Recurse -ErrorAction SilentlyContinue |

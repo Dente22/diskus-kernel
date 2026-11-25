@@ -1,24 +1,24 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**—** фаза не выбрана (VM готова)
+**—** фаза не выбрана (P11 закрыт)
 
 ## Чеклист
 - (пусто)
 
 ## Закрыто
-- P0–P10c — ✅ ядро
-- **VM** — ✅ WSL2 `DiskusUbuntu` + Linux build/smoke
+- P0–P11 — ✅ … → DKFS → **paging (identity map)**
+- VM — ✅ WSL2 `DiskusUbuntu`
 
-## Кандидаты (дальше из VM)
-- page tables / больше syscall / shell polish
+## Кандидаты
+- **P12** — больше syscalls (файлы из ring3)
+- **P13** — user process в планировщике
 - или скажи свою идею
 
 ## Парковка
-- UEFI / Limine / Desktop / Rust / full disk FS
-- GUI Hyper-V VM (если WSL мало)
+- UEFI / Limine / Desktop / Rust / full disk FS / раздельные user pages
 
 ## Правило
 Каждую фазу дописывать в **`LEARN.md`**.  
-После крупного изменения / пачки — **commit + push** на GitHub.  
-Эксперименты — из `wsl -d DiskusUbuntu` (см. `VM.md`).
+После крупного изменения / пачки — **commit + push**.  
+Эксперименты — из WSL (`VM.md`).

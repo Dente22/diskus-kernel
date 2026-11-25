@@ -1,5 +1,6 @@
-/* Diskus P10c — load user programs from disk (DKFS) */
+/* Diskus P11 — paging (identity map) + disk user programs */
 #include "disk.h"
+#include "paging.h"
 #include "ramfs.h"
 
 typedef unsigned char u8;
@@ -382,7 +383,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P10c - user progs from disk DKFS\n");
+  puts("Diskus kernel P11 - paging + disk user progs\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -654,7 +655,9 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P10c disk\n");
+  puts("P11 paging\n");
+  paging_init();
+  puts("paging on\n");
   gdt_tss_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);

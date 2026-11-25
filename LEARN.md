@@ -259,7 +259,32 @@ cat note
 
 ---
 
+## P11 — Paging (identity map)
+
+**Идея:** CPU переводит «виртуальный» адрес в физический через таблицы. Пока делаем **identity map**: virt == phys для первых 4 MiB.
+
+1. **Page Table** (`0x66000`) — 1024 PTE → страницы `0 … 4MiB-4K`, флаги Present|RW|**User**.
+2. **Page Directory** (`0x65000`) — PDE[0] указывает на эту PT (тоже с User).
+3. `mov cr3, PD` → `CR0 |= PG` → короткий `jmp` (сброс prefetch).
+
+**Ловушка:** без бита **User (U/S)** ring3 получает page fault на любом доступе — даже при identity map.
+
+**Код:** `kernel/paging.c` (`paging_init`).
+
+**Пока не делаем:** раздельные user/kernel страницы, `#PF` handler, map выше 4 MiB.
+
+**Проверка:** `paging on`, дальше boot как раньше (diskfs, user, shell).
+
+**Чему учит:** зачем MMU, что такое PDE/PTE, почему без identity всё «внезапно» падает.
+
+---
+
 ## Словарь
+
+- **Paging / MMU** — перевод virt→phys по таблицам.
+- **Identity map** — virt == phys (учебный первый шаг).
+- **CR3** — физический адрес page directory.
+- **CR0.PG** — бит включения paging.
 
 - **Syscall** — официальный вход из «приложения» в ядро.
 - **Ring 0 / Ring 3** — уровни привилегий CPU (ядро / user).
