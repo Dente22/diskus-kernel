@@ -1,26 +1,21 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P2 — C kernel + VGA** — автосмоук OK → окно → «ок»
+**P3 — Keyboard + shell** — автосмоук OK → окно → «ок»
 
 ## Чеклист
-- [x] Boot: int 0x13 грузит kernel с диска
-- [x] `kernel/` — entry.asm + main.c (VGA 0xB8000)
-- [x] Сборка img (boot + kernel) через Zig + NASM
-- [x] Автосмоук: `Diskus C` на serial
-- [ ] Ты видишь в окне → «ок»
+- [x] PS/2 scancode + serial input
+- [x] Shell: `help` / `clear` / `about` / `echo`
+- [x] Автосмоук: prompt на serial
+- [ ] Кликни в QEMU, набери `help` → «ок»
 
 ## Закрыто
-- P0 Boot sector — ✅
+- P0 Boot — ✅
 - P1 Protected mode — ✅
+- P2 C kernel + VGA — ✅
 
 ## Дальше
-- P3 — keyboard + simple shell
+- P4 — (после «ок») таймер / IDT lite
 
 ## Парковка
-- UEFI / Limine
-- FS
-- Связь с Diskus Desktop
-
-## Бэклог
-- Rust kernel позже
+- UEFI / Limine / FS / Desktop bridge / Rust

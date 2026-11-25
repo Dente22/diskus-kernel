@@ -34,34 +34,27 @@ Write-Host "QEMU: $qemu"
 Write-Host "Image: $Img"
 
 if ($Smoke) {
-    # Headless: expect "Diskus" on COM1 within a few seconds
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $qemu
-    $psi.Arguments = "-drive format=raw,file=`"$Img`" -boot order=c -display none -serial stdio -no-reboot"
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.UseShellExecute = $false
-    $p = [System.Diagnostics.Process]::Start($psi)
-    $deadline = [DateTime]::UtcNow.AddSeconds(6)
-    $buf = ''
-    while ([DateTime]::UtcNow -lt $deadline) {
-        Start-Sleep -Milliseconds 200
-        while (-not $p.StandardOutput.EndOfStream) {
-            $buf += [char]$p.StandardOutput.Read()
-            if ($buf -match 'Diskus C') { break }
-        }
-        if ($buf -match 'Diskus C') { break }
-        if ($p.HasExited) { break }
-    }
+    # Headless: serial to file (Windows pipe DataAvailable is flaky with QEMU)
+    $OutDir = Join-Path $Root 'build'
+    $log = Join-Path $OutDir 'serial.log'
+    if (Test-Path $log) { Remove-Item $log -Force }
+    $args = "-drive format=raw,file=`"$Img`" -boot order=c -display none -serial file:$log -no-reboot"
+    $p = Start-Process -FilePath $qemu -ArgumentList $args -PassThru -WindowStyle Hidden
+    Start-Sleep -Seconds 2
     if (-not $p.HasExited) {
-        try { $p.Kill() } catch {}
+        try { Stop-Process -Id $p.Id -Force } catch {}
     }
-    Write-Host $buf
-    if ($buf -match 'Diskus C') {
+    Start-Sleep -Milliseconds 400
+    $text = ''
+    if (Test-Path $log) {
+        $text = [IO.File]::ReadAllText($log)
+    }
+    Write-Host $text
+    if ($text -match 'Diskus shell' -and $text -match '>') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL — no 'Diskus C' on serial. Got: $buf"
+    Write-Error "SMOKE FAIL - no shell prompt on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c
