@@ -1,6 +1,8 @@
 /build/
+/tools/zig/
 *.bin
 *.img
 *.o
 *.elf
 .DS_Store
+

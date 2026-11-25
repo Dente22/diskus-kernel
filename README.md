@@ -2,16 +2,15 @@
 
 Hobby OS с нуля (BYOX-стиль). **Не** Diskus Desktop / хаб — отдельный учебный kernel.
 
-## P0 — Boot
+## Сейчас: P2 — C kernel
 
-Печатает `Diskus` через BIOS в QEMU.
+Boot грузит kernel с диска → protected mode → `kmain` печатает `Diskus C`.
 
 ```powershell
 winget install NASM.NASM SoftwareFreedomConservancy.QEMU
+# Zig: portable в tools\zig  (или winget install zig.zig)
 .\scripts\build.ps1
 .\scripts\run.ps1
 ```
 
-Смоук: в окне QEMU видно `Diskus` / `kernel P0 — boot OK`.
-
-См. `FOCUS.md`.
+Смоук: `.\scripts\run.ps1 -Smoke` → `Diskus C`. См. `FOCUS.md`.

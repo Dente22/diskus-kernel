@@ -1,7 +1,9 @@
-; Diskus P1 — BIOS boot → 32-bit protected mode
-; Prints "Diskus PM" on VGA (0xB8000) + COM1.
+; Diskus P2 — load C kernel from disk, enter PM, jump to 0x10000
 BITS 16
 ORG 0x7C00
+
+KERNEL_SEG  equ 0x1000          ; physical 0x10000
+KERNEL_SECS equ 32              ; 16 KiB max for now
 
 start:
     cli
@@ -10,22 +12,51 @@ start:
     mov es, ax
     mov ss, ax
     mov sp, 0x7C00
+    sti
+
+    mov [boot_drive], dl        ; BIOS drive number
 
     call serial_init
+
+    ; Load kernel: CHS start sector 2 (after MBR/boot)
+    mov ax, KERNEL_SEG
+    mov es, ax
+    xor bx, bx                  ; ES:BX = 0x1000:0000
+    mov ah, 0x02                ; read sectors
+    mov al, KERNEL_SECS
+    mov ch, 0                   ; cylinder
+    mov cl, 2                   ; sector (1-based; 1=boot)
+    mov dh, 0                   ; head
+    mov dl, [boot_drive]
+    int 0x13
+    jc disk_fail
 
     ; Fast A20
     in al, 0x92
     or al, 2
     out 0x92, al
 
+    cli
     lgdt [gdt_desc]
-
     mov eax, cr0
     or eax, 1
     mov cr0, eax
-    jmp 0x08:pm_entry           ; flush pipeline, CS = code
+    jmp 0x08:pm_entry
 
-; ---- 16-bit helpers (before PM) ----
+disk_fail:
+    mov si, err_disk
+.f:
+    lodsb
+    test al, al
+    jz .h
+    mov ah, 0x0E
+    int 0x10
+    call serial_putc16
+    jmp .f
+.h:
+    hlt
+    jmp .h
+
 serial_init:
     mov dx, 0x3F9
     xor al, al
@@ -50,14 +81,27 @@ serial_init:
     out dx, al
     ret
 
-; ---- GDT ----
+serial_putc16:
+    push ax
+    push dx
+    mov dx, 0x3FD
+.w:
+    in al, dx
+    test al, 0x20
+    jz .w
+    pop dx
+    pop ax
+    push dx
+    mov dx, 0x3F8
+    out dx, al
+    pop dx
+    ret
+
 align 8
 gdt:
-    dq 0                        ; null
-    ; code: base0 limit 4G, 32-bit, exec/read
+    dq 0
     dw 0xFFFF, 0x0000
     db 0x00, 10011010b, 11001111b, 0x00
-    ; data: base0 limit 4G, 32-bit, read/write
     dw 0xFFFF, 0x0000
     db 0x00, 10010010b, 11001111b, 0x00
 gdt_end:
@@ -66,7 +110,9 @@ gdt_desc:
     dw gdt_end - gdt - 1
     dd gdt
 
-; ---- Protected mode ----
+boot_drive: db 0
+err_disk: db "disk read fail", 0x0A, 0
+
 BITS 32
 pm_entry:
     mov ax, 0x10
@@ -76,66 +122,7 @@ pm_entry:
     mov gs, ax
     mov ss, ax
     mov esp, 0x90000
-
-    ; clear first lines of VGA
-    mov edi, 0xB8000
-    mov ecx, 80 * 2
-    mov ax, 0x0F20              ; space, white
-    rep stosw
-
-    mov edi, 0xB8000
-    mov esi, msg
-    mov ah, 0x0A                ; green
-.print:
-    lodsb
-    test al, al
-    jz .hang
-    cmp al, 0x0A
-    je .nl
-    mov [edi], ax
-    add edi, 2
-    call serial_putc32
-    jmp .print
-.nl:
-    ; advance VGA to next row (160 bytes)
-    mov eax, edi
-    sub eax, 0xB8000
-    xor edx, edx
-    mov ecx, 160
-    div ecx
-    inc eax
-    imul eax, 160
-    add eax, 0xB8000
-    mov edi, eax
-    mov al, 0x0A
-    call serial_putc32
-    mov ah, 0x0A
-    jmp .print
-
-.hang:
-    hlt
-    jmp .hang
-
-; AL = char
-serial_putc32:
-    push eax
-    push edx
-    mov dx, 0x3FD
-.wait:
-    in al, dx
-    test al, 0x20
-    jz .wait
-    pop edx
-    pop eax
-    push edx
-    mov dx, 0x3F8
-    out dx, al
-    pop edx
-    ret
-
-msg:
-    db "Diskus PM", 0x0A
-    db "protected mode OK", 0x0A, 0
+    jmp 0x10000                 ; kernel entry
 
     times 510 - ($ - $$) db 0
     dw 0xAA55

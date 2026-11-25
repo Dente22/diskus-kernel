@@ -1,20 +1,20 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P1 — Protected mode** — автосмоук OK → окно QEMU → «ок»
+**P2 — C kernel + VGA** — автосмоук OK → окно → «ок»
 
 ## Чеклист
-- [x] GDT (null / code / data)
-- [x] A20 + switch CR0.PE
-- [x] Far jump в 32-bit, печать `Diskus PM`
-- [x] Автосмоук serial
+- [x] Boot: int 0x13 грузит kernel с диска
+- [x] `kernel/` — entry.asm + main.c (VGA 0xB8000)
+- [x] Сборка img (boot + kernel) через Zig + NASM
+- [x] Автосмоук: `Diskus C` на serial
 - [ ] Ты видишь в окне → «ок»
 
 ## Закрыто
-- P0 Boot sector (VGA+COM1, QEMU) — ✅
+- P0 Boot sector — ✅
+- P1 Protected mode — ✅
 
 ## Дальше
-- P2 — C kernel + VGA
 - P3 — keyboard + simple shell
 
 ## Парковка
