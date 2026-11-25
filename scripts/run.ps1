@@ -40,7 +40,7 @@ if ($Smoke) {
     if (Test-Path $log) { Remove-Item $log -Force }
     $args = "-drive format=raw,file=`"$Img`" -boot order=c -display none -serial file:$log -no-reboot"
     $p = Start-Process -FilePath $qemu -ArgumentList $args -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
     if (-not $p.HasExited) {
         try { Stop-Process -Id $p.Id -Force } catch {}
     }
@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P9' -and $text -match 'loaded hello' -and $text -match 'hello from ring3' -and $text -match 'back from user') {
+        if ($text -match 'P10a' -and $text -match 'preempt switches' -and $text -match 'hello from ring3' -and $text -match 'back from user') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P9 ramfs user on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P10a preempt on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

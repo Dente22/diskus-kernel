@@ -202,17 +202,35 @@ cat note
 
 ---
 
+## P10a — Preemptive multitasking
+
+**Идея:** задачу снимает не она сама (`yield`), а таймер — ОС отбирает CPU.
+
+1. **IRQ0** после `ticks++` и EOI вызывает `schedule_switch` (если `preempt_enabled` и не ring3).
+2. Контекст единый: `pusha` + кадр для **`iret`** (EIP/CS/EFLAGS) — и у IRQ, и у `yield`.
+3. **blink** крутится без `yield`; shell в простое делает `hlt` (пробуждение по IRQ).
+4. Из ring3 не планируем — иначе затрём user/TSS-стек.
+
+**Код:** `idt.asm` (`irq0_stub`, `yield`), `main.c` (`preempt_enabled`, `task_spawn`).
+
+**Проверка:** при буте `preempt switches N` (N≥8); в углу VGA спиннер без `yield`; `tasks` показывает switches.
+
+**Чему учит:** cooperative vs preemptive, зачем одинаковый кадр стека, почему не preempt’ить user вслепую.
+
+---
+
 ## Словарь
 
 - **Syscall** — официальный вход из «приложения» в ядро.
 - **Ring 0 / Ring 3** — уровни привилегий CPU (ядро / user).
 - **TSS** — структура для стека ядра при входе из user.
+- **Preemptive** — ядро само переключает задачи по таймеру.
+- **Cooperative** — задача сама вызывает `yield`.
 
 - **Freestanding** — нет ОС под нами, нет обычной libc.
 - **Scancode** — сырой код клавиши с контроллера, не буква.
 - **EOI** — «я обработал IRQ», иначе PIC не пришлёт следующий.
 - **Ring buffer** — очередь фиксированного размера (head/tail).
-- **Cooperative** — задача сама вызывает `yield`.
 
 ---
 

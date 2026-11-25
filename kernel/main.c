@@ -1,4 +1,4 @@
-/* Diskus P9 — load user program from ramfs */
+/* Diskus P10a — preemptive multitasking from IRQ0 */
 #include "ramfs.h"
 #include "user_blob.h"
 
@@ -23,6 +23,8 @@ static volatile u16 *const VGA = (volatile u16 *)0xB8000;
 static u32 cursor;
 static u8 shift_on;
 static volatile u32 ticks;
+/* Set after tasks_init; IRQ0 skips schedule when 0. Asm reads this symbol. */
+volatile u32 preempt_enabled;
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
@@ -380,7 +382,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P9 - user programs from ramfs\n");
+  puts("Diskus kernel P10a - preemptive tasks + ramfs user\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -572,7 +574,7 @@ static void shell(void) {
   for (;;) {
     int c = getc();
     if (c < 0) {
-      yield();
+      __asm__ volatile("hlt"); /* timer preempts → blink runs */
       continue;
     }
     if (c == '\r')
@@ -608,7 +610,7 @@ static void task_blink(void) {
   for (;;) {
     VGA[VGA_COLS - 1] = (u16)spin[i % 4] | (u16)(0x0E << 8);
     i++;
-    yield();
+    /* no yield — preemptive IRQ0 switches away */
   }
 }
 
@@ -620,36 +622,39 @@ static void task_exit(void) {
 
 static void task_spawn(u32 id, const char *name, void (*entry)(void), u32 *stack_top) {
   u32 *sp = stack_top;
-  /* After yield: popa then ret. popa needs EDI..EAX then return EIP. */
-  *--sp = (u32)task_exit; /* if entry returns */
+  /* IRQ/yield resume: popa then iret → EIP, CS, EFLAGS */
+  *--sp = 0x202;          /* EFLAGS (IF=1) */
+  *--sp = 0x08;           /* kernel CS */
   *--sp = (u32)entry;     /* EIP */
   *--sp = 0;              /* EAX */
   *--sp = 0;              /* ECX */
   *--sp = 0;              /* EDX */
   *--sp = 0;              /* EBX */
-  *--sp = 0;              /* ESP (discarded) */
+  *--sp = 0;              /* ESP (discarded by popa) */
   *--sp = 0;              /* EBP */
   *--sp = 0;              /* ESI */
   *--sp = 0;              /* EDI <- ESP */
   tasks[id].esp = (u32)sp;
   tasks[id].name = name;
   tasks[id].alive = 1;
+  (void)task_exit;
 }
 
 static void tasks_init(void) {
   current = 0;
   task_switches = 0;
+  preempt_enabled = 0;
   tasks[0].name = "shell";
   tasks[0].alive = 1;
-  tasks[0].esp = 0; /* set on first yield */
-  (void)STACK0_TOP;  /* shell uses current ESP from kmain */
+  tasks[0].esp = 0; /* filled on first IRQ/yield */
+  (void)STACK0_TOP;
   task_spawn(1, "blink", task_blink, STACK1_TOP);
 }
 
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P9 ramfs user\n");
+  puts("P10a preempt\n");
   gdt_tss_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);
@@ -667,9 +672,13 @@ void kmain(void) {
   ramfs_init();
   ramfs_put("hello", user_blob, user_blob_len);
 
-  u32 start = ticks;
-  while (ticks - start < 10)
+  preempt_enabled = 1;
+  u32 sw0 = task_switches;
+  while (task_switches - sw0 < 8)
     __asm__ volatile("hlt");
+  puts("preempt switches ");
+  put_u32(task_switches);
+  puts("\n");
 
   puts("user from ramfs...\n");
   run_from_ramfs("hello");

@@ -1,21 +1,22 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**—** фаза не выбрана (P9 закрыт)
+**—** фаза не выбрана (P10a закрыт)
 
 ## Чеклист
 - (пусто)
 
 ## Закрыто
-- P0–P9 — ✅ boot → PM → C → shell → IRQ/yield → ramfs → syscalls → ring3 → exec from ramfs
+- P0–P10a — ✅ … → ring3 → ramfs exec → **preemptive**
 
-## Кандидаты на следующую фазу
-- **P10a** — preemptive: switch из IRQ0 (не только `yield`)
+## Кандидаты
 - **P10b** — вторая user-прога в ramfs + `run <name>`
-- **P10c** — чтение с «диска» (секторы образа) вместо только RAM-сида
+- **P10c** — грузить программу с диска (секторы образа)
+- или скажи свою идею
 
 ## Парковка
 - UEFI / Limine / Desktop / Rust / page tables / disk FS
 
 ## Правило
-Каждую фазу дописывать в **`LEARN.md`**.
+Каждую фазу дописывать в **`LEARN.md`**.  
+После крупного изменения / пачки обновлений — **commit + push** на GitHub (`origin/main`).
