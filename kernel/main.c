@@ -1,6 +1,6 @@
-/* Diskus P10b — second user program in ramfs */
+/* Diskus P10c — load user programs from disk (DKFS) */
+#include "disk.h"
 #include "ramfs.h"
-#include "user_blob.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -382,7 +382,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P10b - hello/bye user progs in ramfs\n");
+  puts("Diskus kernel P10c - user progs from disk DKFS\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -654,7 +654,7 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P10b users\n");
+  puts("P10c disk\n");
   gdt_tss_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);
@@ -670,8 +670,20 @@ void kmain(void) {
   irq_sti();
   tasks_init();
   ramfs_init();
-  ramfs_put("hello", user_blob, user_blob_len);
-  ramfs_put("bye", user2_blob, user2_blob_len);
+
+  puts("diskfs...\n");
+  irq_cli();
+  int nfiles = diskfs_load();
+  irq_sti();
+  if (nfiles < 0) {
+    puts("diskfs fail ");
+    put_u32((u32)(-nfiles));
+    puts("\n");
+  } else {
+    puts("diskfs loaded ");
+    put_u32((u32)nfiles);
+    puts("\n");
+  }
 
   preempt_enabled = 1;
   u32 sw0 = task_switches;
@@ -681,7 +693,7 @@ void kmain(void) {
   put_u32(task_switches);
   puts("\n");
 
-  puts("user from ramfs...\n");
+  puts("user from disk...\n");
   run_from_ramfs("hello");
   run_from_ramfs("bye");
 

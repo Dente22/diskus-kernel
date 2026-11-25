@@ -1,20 +1,21 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**—** фаза не выбрана (P10b закрыт)
+**—** фаза не выбрана (P10c закрыт)
 
 ## Чеклист
 - (пусто)
 
 ## Закрыто
-- P0–P10b — ✅ … → preemptive → **две user-проги в ramfs**
+- P0–P10c — ✅ … → preemptive → dual user → **DKFS с диска (ATA PIO)**
 
 ## Кандидаты
-- **P10c** — грузить программу с диска (секторы образа)
+- page tables / больше syscall / shell polish
 - или скажи свою идею
 
 ## Парковка
-- UEFI / Limine / Desktop / Rust / page tables / disk FS
+- **Виртуалка (Hyper-V / VMware / VirtualBox) для Diskus** — когда глубже займёмся ОС
+- UEFI / Limine / Desktop / Rust / full disk FS
 
 ## Правило
 Каждую фазу дописывать в **`LEARN.md`**.  

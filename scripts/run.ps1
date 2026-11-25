@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P10b' -and $text -match 'hello from ring3' -and $text -match 'bye from ring3' -and $text -match 'back from user') {
+        if ($text -match 'P10c' -and $text -match 'diskfs loaded' -and $text -match 'hello from ring3' -and $text -match 'bye from ring3') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P10b dual user on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P10c disk load on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c
