@@ -1,25 +1,24 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**VM — среда для экспериментов** — виртуалка + туда репо/тулзы/QEMU
+**—** фаза не выбрана (VM готова)
 
 ## Чеклист
-- [x] WSL2 вместо VirtualBox (Hyper-V уже был)
-- [x] Distro `DiskusUbuntu` (Ubuntu 24.04)
-- [x] git, nasm, qemu, zig 0.17.1
-- [x] `build.sh` + smoke внутри VM (SMOKE OK)
-- [x] `VM.md` + `scripts/vm-setup.sh` / `build.sh` / `run.sh`
-- [ ] «ок» → push
+- (пусто)
 
 ## Закрыто
-- P0–P10c — ✅
+- P0–P10c — ✅ ядро
+- **VM** — ✅ WSL2 `DiskusUbuntu` + Linux build/smoke
 
-## Дальше
-- (после VM) — следующие фазы ядра уже из виртуалки
+## Кандидаты (дальше из VM)
+- page tables / больше syscall / shell polish
+- или скажи свою идею
 
 ## Парковка
-- UEFI / Limine / Desktop / Rust / page tables / full disk FS
+- UEFI / Limine / Desktop / Rust / full disk FS
+- GUI Hyper-V VM (если WSL мало)
 
 ## Правило
 Каждую фазу дописывать в **`LEARN.md`**.  
-После крупного изменения / пачки обновлений — **commit + push** на GitHub (`origin/main`).
+После крупного изменения / пачки — **commit + push** на GitHub.  
+Эксперименты — из `wsl -d DiskusUbuntu` (см. `VM.md`).
