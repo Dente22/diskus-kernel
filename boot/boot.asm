@@ -3,7 +3,7 @@ BITS 16
 ORG 0x7C00
 
 KERNEL_SEG  equ 0x1000          ; physical 0x10000
-KERNEL_SECS equ 32              ; 16 KiB max for now
+KERNEL_SECS equ 64              ; 32 KiB max for now
 
 start:
     cli

@@ -1,20 +1,24 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P4 — IDT + PIT timer** — автосмоук OK → окно → «ок»
+**P5 — IRQ1 + tasks** — автосмоук OK → окно → «ок»
 
 ## Чеклист
-- [x] IDT + PIC remap, IRQ0
-- [x] PIT ~100 Hz, `ticks`
-- [x] Shell: `uptime`
-- [x] Автосмоук: `ticks N`
-- [ ] В QEMU: `uptime` / `help` → «ок»
+- [x] IRQ1 ring buffer
+- [x] shell + blink через `yield`
+- [x] команда `tasks`
+- [x] `LEARN.md` (журнал обучения P0–P5)
+- [x] Автосмоук
+- [ ] В QEMU: спиннер + `tasks` → «ок»
 
 ## Закрыто
-- P0–P3 — ✅
+- P0–P4 — ✅
 
 ## Дальше
-- P5 — (после «ок») больше IRQ / multitask lite
+- P6 — (после «ок») простая FS / больше syscalls
 
 ## Парковка
-- UEFI / Limine / FS / Desktop / Rust
+- UEFI / Limine / Desktop / Rust / preemptive
+
+## Правило
+Каждую фазу дописывать в **`LEARN.md`**: что / зачем / где в коде / как проверить.

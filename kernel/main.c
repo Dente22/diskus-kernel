@@ -1,9 +1,9 @@
-/* Diskus P4 — VGA + PS/2 + serial shell + PIT timer (IRQ0) */
+/* Diskus P5 — IRQ keyboard ring + cooperative tasks */
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 
-enum { VGA_COLS = 80, VGA_ROWS = 25, TIMER_HZ = 100 };
+enum { VGA_COLS = 80, VGA_ROWS = 25, TIMER_HZ = 100, NTASKS = 2 };
 
 static volatile u16 *const VGA = (volatile u16 *)0xB8000;
 static u32 cursor;
@@ -11,9 +11,11 @@ static u8 shift_on;
 static volatile u32 ticks;
 
 extern void irq0_stub(void);
+extern void irq1_stub(void);
 extern void load_idt(void *idtp);
 extern void irq_sti(void);
 extern void irq_cli(void);
+extern void yield(void);
 
 struct idt_entry {
   u16 base_lo;
@@ -31,6 +33,23 @@ struct idt_ptr {
 static struct idt_entry idt[256];
 static struct idt_ptr idtp;
 
+struct task {
+  u32 esp;
+  const char *name;
+  u8 alive;
+};
+
+/* Task stacks in known RAM (not BSS of the kernel image — objcopy drops BSS). */
+#define STACK0_TOP ((u32 *)0x00070000)
+#define STACK1_TOP ((u32 *)0x00072000)
+static struct task tasks[NTASKS];
+static u32 current;
+static u32 task_switches;
+
+enum { KBD_CAP = 64 };
+static volatile u8 kbd_q[KBD_CAP];
+static volatile u8 kbd_head, kbd_tail;
+
 static inline u8 inb(u16 port) {
   u8 v;
   __asm__ volatile("inb %1, %0" : "=a"(v) : "Nd"(port));
@@ -43,6 +62,29 @@ static inline void outb(u16 port, u8 v) {
 
 void timer_handler(void) { ticks++; }
 
+void kbd_irq_handler(void) {
+  u8 sc = inb(0x60);
+  u8 next = (u8)((kbd_head + 1) % KBD_CAP);
+  if (next == kbd_tail)
+    return; /* drop */
+  kbd_q[kbd_head] = sc;
+  kbd_head = next;
+}
+
+u32 schedule_switch(u32 old_esp) {
+  tasks[current].esp = old_esp;
+  u32 next = current;
+  for (u32 i = 0; i < NTASKS; i++) {
+    next = (next + 1) % NTASKS;
+    if (tasks[next].alive) {
+      current = next;
+      task_switches++;
+      return tasks[current].esp;
+    }
+  }
+  return old_esp;
+}
+
 static void idt_set(u8 num, u32 base, u16 sel, u8 flags) {
   idt[num].base_lo = (u16)(base & 0xFFFF);
   idt[num].base_hi = (u16)((base >> 16) & 0xFFFF);
@@ -54,13 +96,13 @@ static void idt_set(u8 num, u32 base, u16 sel, u8 flags) {
 static void pic_remap(void) {
   outb(0x20, 0x11);
   outb(0xA0, 0x11);
-  outb(0x21, 0x20); /* master IRQs -> INT 32 */
-  outb(0xA1, 0x28); /* slave  -> INT 40 */
+  outb(0x21, 0x20);
+  outb(0xA1, 0x28);
   outb(0x21, 0x04);
   outb(0xA1, 0x02);
   outb(0x21, 0x01);
   outb(0xA1, 0x01);
-  outb(0x21, 0xFE); /* unmask IRQ0 only */
+  outb(0x21, 0xFC); /* IRQ0 + IRQ1 */
   outb(0xA1, 0xFF);
 }
 
@@ -74,7 +116,8 @@ static void pit_init(u32 hz) {
 static void interrupts_init(void) {
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);
-  idt_set(32, (u32)irq0_stub, 0x08, 0x8E); /* present, DPL0, 32-bit interrupt gate */
+  idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
+  idt_set(33, (u32)irq1_stub, 0x08, 0x8E);
   idtp.limit = sizeof(idt) - 1;
   idtp.base = (u32)&idt;
   load_idt(&idtp);
@@ -162,10 +205,7 @@ static const char MAP_SHIFT[58] = {
     0,    ' ',
 };
 
-static int kbd_getc(void) {
-  if (!(inb(0x64) & 1))
-    return -1;
-  u8 sc = inb(0x60);
+static int scancode_to_ascii(u8 sc) {
   if (sc == 0x2A || sc == 0x36) {
     shift_on = 1;
     return -1;
@@ -180,6 +220,14 @@ static int kbd_getc(void) {
     return -1;
   char ch = shift_on ? MAP_SHIFT[sc] : MAP[sc];
   return ch ? (int)ch : -1;
+}
+
+static int kbd_getc(void) {
+  if (kbd_tail == kbd_head)
+    return -1;
+  u8 sc = kbd_q[kbd_tail];
+  kbd_tail = (u8)((kbd_tail + 1) % KBD_CAP);
+  return scancode_to_ascii(sc);
 }
 
 static int getc(void) {
@@ -206,17 +254,17 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help  clear  about  echo <text>  uptime\n");
+  puts("commands: help clear about echo uptime tasks\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P4 - freestanding C, PS/2 shell, PIT timer\n");
+  puts("Diskus kernel P5 - IRQ1 kbd ring + cooperative tasks\n");
 }
 
 static void cmd_uptime(void) {
   u32 t = ticks;
   u32 sec = t / TIMER_HZ;
-  u32 cs = t % TIMER_HZ; /* centiseconds-ish at 100Hz */
+  u32 cs = t % TIMER_HZ;
   puts("uptime ");
   put_u32(sec);
   vga_putc('.');
@@ -226,6 +274,24 @@ static void cmd_uptime(void) {
   puts(" s (");
   put_u32(t);
   puts(" ticks)\n");
+}
+
+static void cmd_tasks(void) {
+  puts("tasks:\n");
+  for (u32 i = 0; i < NTASKS; i++) {
+    if (!tasks[i].alive)
+      continue;
+    puts("  ");
+    put_u32(i);
+    puts(" ");
+    puts(tasks[i].name);
+    if (i == current)
+      puts(" *");
+    puts("\n");
+  }
+  puts("switches ");
+  put_u32(task_switches);
+  puts("\n");
 }
 
 static void run_line(char *line) {
@@ -253,6 +319,10 @@ static void run_line(char *line) {
     cmd_uptime();
     return;
   }
+  if (streq(line, "tasks")) {
+    cmd_tasks();
+    return;
+  }
   if (starts_with(line, "echo ")) {
     puts(line + 5);
     puts("\n");
@@ -277,7 +347,7 @@ static void shell(void) {
   for (;;) {
     int c = getc();
     if (c < 0) {
-      __asm__ volatile("hlt"); /* wake on IRQ0 */
+      yield();
       continue;
     }
     if (c == '\r')
@@ -307,16 +377,68 @@ static void shell(void) {
   }
 }
 
+static void task_blink(void) {
+  static const char spin[] = "|/-\\";
+  u32 i = 0;
+  for (;;) {
+    VGA[VGA_COLS - 1] = (u16)spin[i % 4] | (u16)(0x0E << 8);
+    i++;
+    yield();
+  }
+}
+
+static void task_exit(void) {
+  tasks[current].alive = 0;
+  for (;;)
+    yield();
+}
+
+static void task_spawn(u32 id, const char *name, void (*entry)(void), u32 *stack_top) {
+  u32 *sp = stack_top;
+  /* After yield: popa then ret. popa needs EDI..EAX then return EIP. */
+  *--sp = (u32)task_exit; /* if entry returns */
+  *--sp = (u32)entry;     /* EIP */
+  *--sp = 0;              /* EAX */
+  *--sp = 0;              /* ECX */
+  *--sp = 0;              /* EDX */
+  *--sp = 0;              /* EBX */
+  *--sp = 0;              /* ESP (discarded) */
+  *--sp = 0;              /* EBP */
+  *--sp = 0;              /* ESI */
+  *--sp = 0;              /* EDI <- ESP */
+  tasks[id].esp = (u32)sp;
+  tasks[id].name = name;
+  tasks[id].alive = 1;
+}
+
+static void tasks_init(void) {
+  current = 0;
+  task_switches = 0;
+  tasks[0].name = "shell";
+  tasks[0].alive = 1;
+  tasks[0].esp = 0; /* set on first yield */
+  (void)STACK0_TOP;  /* shell uses current ESP from kmain */
+  task_spawn(1, "blink", task_blink, STACK1_TOP);
+}
+
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P4 IDT + PIT timer\n");
+  puts("P5 IRQ1 + cooperative tasks\n");
   interrupts_init();
+  puts("irq ok\n");
+  tasks_init();
+  puts("tasks ok\n");
 
-  /* ~0.3s for smoke: prove ticks advance */
   u32 start = ticks;
-  while (ticks - start < 30)
-    __asm__ volatile("hlt");
+  u32 spins = 0;
+  while (ticks - start < 20) {
+    spins++;
+    if (spins > 200000000u) {
+      puts("timer fail\n");
+      break;
+    }
+  }
   puts("ticks ");
   put_u32(ticks);
   puts("\n");

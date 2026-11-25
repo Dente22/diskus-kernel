@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P4' -and $text -match 'ticks' -and $text -match '>') {
+        if ($text -match 'P5' -and $text -match 'ticks' -and $text -match '>') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P4 timer/shell on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P5 on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

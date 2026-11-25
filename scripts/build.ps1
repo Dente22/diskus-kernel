@@ -85,7 +85,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$KERNEL_SECS = 32
+$KERNEL_SECS = 64
 $pad = $KERNEL_SECS * 512
 $kb = [System.IO.File]::ReadAllBytes($kernelBin)
 if ($kb.Length -gt $pad) {
