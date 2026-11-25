@@ -1,9 +1,11 @@
-/* Diskus P7 — syscalls (int 0x80) + ramfs + tasks */
+/* Diskus P9 — load user program from ramfs */
 #include "ramfs.h"
+#include "user_blob.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef unsigned long long u64;
 
 enum {
   VGA_COLS = 80,
@@ -12,6 +14,9 @@ enum {
   NTASKS = 2,
   SYS_WRITE = 1,
   SYS_UPTIME = 2,
+  SYS_EXIT = 3,
+  USER_ENTRY = 0x40000,
+  USER_STACK = 0x50000,
 };
 
 static volatile u16 *const VGA = (volatile u16 *)0xB8000;
@@ -26,6 +31,10 @@ extern void load_idt(void *idtp);
 extern void irq_sti(void);
 extern void irq_cli(void);
 extern void yield(void);
+extern void gdt_flush(void *gdt_ptr);
+extern void tss_flush(u16 selector);
+extern void enter_userland(u32 eip, u32 esp);
+extern void exit_userland(void);
 
 static void puts(const char *s);
 static void put_u32(u32 n);
@@ -44,8 +53,26 @@ struct idt_ptr {
   u32 base;
 } __attribute__((packed));
 
-static struct idt_entry idt[256];
+struct gdt_ptr {
+  u16 limit;
+  u32 base;
+} __attribute__((packed));
+
+struct tss_entry {
+  u32 prev;
+  u32 esp0;
+  u32 ss0;
+  u32 unused[19];
+  u16 trap;
+  u16 iomap;
+} __attribute__((packed));
+
+/* Fixed RAM — avoid BSS past the loaded kernel image */
+#define IDT_MEM ((struct idt_entry *)0x00061000)
+#define GDT_MEM ((u64 *)0x00062000)
+#define TSS_MEM ((struct tss_entry *)0x00062100)
 static struct idt_ptr idtp;
+static struct gdt_ptr gdtp;
 
 struct task {
   u32 esp;
@@ -100,6 +127,7 @@ u32 schedule_switch(u32 old_esp) {
 }
 
 static void idt_set(u8 num, u32 base, u16 sel, u8 flags) {
+  struct idt_entry *idt = IDT_MEM;
   idt[num].base_lo = (u16)(base & 0xFFFF);
   idt[num].base_hi = (u16)((base >> 16) & 0xFFFF);
   idt[num].sel = sel;
@@ -127,20 +155,41 @@ static void pit_init(u32 hz) {
   outb(0x40, (u8)((div >> 8) & 0xFF));
 }
 
-static void interrupts_init(void) {
-  for (u32 i = 0; i < 256; i++)
-    idt_set((u8)i, 0, 0x08, 0);
-  idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
-  idt_set(33, (u32)irq1_stub, 0x08, 0x8E);
-  idt_set(0x80, (u32)syscall_stub, 0x08, 0x8E); /* software interrupt */
-  idtp.limit = sizeof(idt) - 1;
-  idtp.base = (u32)&idt;
-  load_idt(&idtp);
-  pic_remap();
-  pit_init(TIMER_HZ);
-  ticks = 0;
-  irq_sti();
+static void gdt_set(int num, u32 base, u32 limit, u8 access, u8 gran) {
+  u64 *gdt = GDT_MEM;
+  gdt[num] = 0;
+  gdt[num] |= (u64)(limit & 0xFFFF);
+  gdt[num] |= (u64)(base & 0xFFFF) << 16;
+  gdt[num] |= (u64)((base >> 16) & 0xFF) << 32;
+  gdt[num] |= (u64)access << 40;
+  gdt[num] |= (u64)((limit >> 16) & 0x0F) << 48;
+  gdt[num] |= (u64)(gran & 0xF0) << 48;
+  gdt[num] |= (u64)((base >> 24) & 0xFF) << 56;
 }
+
+static void gdt_tss_init(void) {
+  struct tss_entry *tss = TSS_MEM;
+  for (u32 i = 0; i < sizeof(*tss) / 4; i++)
+    ((u32 *)tss)[i] = 0;
+  /* Separate from kmain stack at 0x90000 — else ring3 int overwrites saved ESP */
+  tss->esp0 = 0x8F000;
+  tss->ss0 = 0x10;
+  tss->iomap = (u16)sizeof(*tss);
+
+  gdt_set(0, 0, 0, 0, 0);
+  gdt_set(1, 0, 0xFFFFF, 0x9A, 0xCF); /* kernel code */
+  gdt_set(2, 0, 0xFFFFF, 0x92, 0xCF); /* kernel data */
+  gdt_set(3, 0, 0xFFFFF, 0xFA, 0xCF); /* user code DPL3 */
+  gdt_set(4, 0, 0xFFFFF, 0xF2, 0xCF); /* user data DPL3 */
+  gdt_set(5, (u32)tss, sizeof(*tss) - 1, 0x89, 0x00);
+
+  gdtp.limit = (u16)(6 * 8 - 1);
+  gdtp.base = (u32)GDT_MEM;
+  gdt_flush(&gdtp);
+  tss_flush(0x28);
+}
+
+/* interrupts_init inlined in kmain for P8 bring-up markers */
 
 /* Called from asm int 0x80: num=eax, arg1=ebx, arg2=ecx, arg3=edx */
 u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
@@ -154,7 +203,32 @@ u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
   }
   if (num == SYS_UPTIME)
     return ticks;
+  if (num == SYS_EXIT)
+    exit_userland(); /* noreturn */
   return (u32)-1;
+}
+
+/* Load raw bytes from ramfs → 0x40000, then ring3. Returns 0 ok, <0 fail. */
+static int run_from_ramfs(const char *name) {
+  int n = ramfs_get(name, (void *)USER_ENTRY, RAMFS_DATA);
+  if (n < 0) {
+    puts("no such program: ");
+    puts(name);
+    puts("\n");
+    return -1;
+  }
+  if (n == 0) {
+    puts("empty program\n");
+    return -1;
+  }
+  puts("loaded ");
+  puts(name);
+  puts(" ");
+  put_u32((u32)n);
+  puts(" bytes\n");
+  enter_userland(USER_ENTRY, USER_STACK);
+  puts("back from user\n");
+  return 0;
 }
 
 static u32 dosyscall(u32 num, u32 a, u32 b, u32 c) {
@@ -301,11 +375,12 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks ls cat write sysdemo\n");
+  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run\n");
+  puts("  run [name]  — load program from ramfs (default: hello)\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P7 - int 0x80 syscalls + ramfs + tasks\n");
+  puts("Diskus kernel P9 - user programs from ramfs\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -438,6 +513,21 @@ static void run_line(char *line) {
     cmd_sysdemo();
     return;
   }
+  if (streq(line, "run")) {
+    run_from_ramfs("hello");
+    return;
+  }
+  if (starts_with(line, "run ")) {
+    char *name = line + 4;
+    while (*name == ' ')
+      name++;
+    if (!*name) {
+      puts("usage: run [name]\n");
+      return;
+    }
+    run_from_ramfs(name);
+    return;
+  }
   if (streq(line, "ls")) {
     cmd_ls();
     return;
@@ -559,18 +649,30 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P7 syscalls\n");
-  interrupts_init();
+  puts("P9 ramfs user\n");
+  gdt_tss_init();
+  for (u32 i = 0; i < 256; i++)
+    idt_set((u8)i, 0, 0x08, 0);
+  idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
+  idt_set(33, (u32)irq1_stub, 0x08, 0x8E);
+  idt_set(0x80, (u32)syscall_stub, 0x08, 0xEE);
+  idtp.limit = (u16)(256 * sizeof(struct idt_entry) - 1);
+  idtp.base = (u32)IDT_MEM;
+  load_idt(&idtp);
+  pic_remap();
+  pit_init(TIMER_HZ);
+  ticks = 0;
+  irq_sti();
   tasks_init();
   ramfs_init();
+  ramfs_put("hello", user_blob, user_blob_len);
 
   u32 start = ticks;
-  while (ticks - start < 15)
+  while (ticks - start < 10)
     __asm__ volatile("hlt");
-  puts("ticks ");
-  put_u32(ticks);
-  puts("\n");
-  sys_puts("syscall path OK\n");
+
+  puts("user from ramfs...\n");
+  run_from_ramfs("hello");
 
   shell();
 }

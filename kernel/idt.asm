@@ -16,28 +16,40 @@ SECTION .text
 
 irq0_stub:
     pusha
+    push ds
+    mov ax, 0x10
+    mov ds, ax
     call timer_handler
     mov al, 0x20
     out 0x20, al
+    pop ds
     popa
     iret
 
 irq1_stub:
     pusha
+    push ds
+    mov ax, 0x10
+    mov ds, ax
     call kbd_irq_handler
     mov al, 0x20
     out 0x20, al
+    pop ds
     popa
     iret
 
 ; int 0x80: eax=num, ebx,ecx,edx=args → eax=result
 syscall_stub:
+    push ds
     push edx
     push ecx
     push ebx
     push eax
+    mov ax, 0x10
+    mov ds, ax
     call syscall_dispatch
     add esp, 16
+    pop ds
     iret
 
 load_idt:

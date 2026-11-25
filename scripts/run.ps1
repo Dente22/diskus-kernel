@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P7' -and $text -match 'syscall path OK' -and $text -match '>') {
+        if ($text -match 'P9' -and $text -match 'loaded hello' -and $text -match 'hello from ring3' -and $text -match 'back from user') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P7 syscall on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P9 ramfs user on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

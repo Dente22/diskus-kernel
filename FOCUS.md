@@ -1,23 +1,21 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P7 — Syscalls lite** — автосмоук OK → окно → «ок»
+**—** фаза не выбрана (P9 закрыт)
 
 ## Чеклист
-- [x] `int 0x80` + `syscall_dispatch`
-- [x] SYS_write / SYS_uptime
-- [x] boot demo + shell `sysdemo`
-- [x] LEARN.md P7
-- [ ] В QEMU: `sysdemo` → «ок»
+- (пусто)
 
 ## Закрыто
-- P0–P6 — ✅
+- P0–P9 — ✅ boot → PM → C → shell → IRQ/yield → ramfs → syscalls → ring3 → exec from ramfs
 
-## Дальше
-- P8 — user ring / apps
+## Кандидаты на следующую фазу
+- **P10a** — preemptive: switch из IRQ0 (не только `yield`)
+- **P10b** — вторая user-прога в ramfs + `run <name>`
+- **P10c** — чтение с «диска» (секторы образа) вместо только RAM-сида
 
 ## Парковка
-- UEFI / Limine / Desktop / Rust / preemptive / disk FS
+- UEFI / Limine / Desktop / Rust / page tables / disk FS
 
 ## Правило
 Каждую фазу дописывать в **`LEARN.md`**.

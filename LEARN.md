@@ -160,9 +160,53 @@ cat note
 
 ---
 
+## P8 — User ring (ring 3)
+
+**Идея:** код «приложения» работает с меньшими привилегиями; в ядро — только через syscall.
+
+1. **GDT** расширен: user code `0x18` / user data `0x20` (DPL3), плюс **TSS** (селектор `0x28`).
+2. **TSS.esp0/ss0** — отдельный стек ядра при прерывании из ring3 (`0x8F000`), **не** тот же что `kmain` (`0x90000`).
+3. **`enter_userland`**: `iret` с CS=`0x1B`, SS=`0x23` → прыжок на `0x40000`.
+4. User-программа (`kernel/user.asm`) пишет строку через `int 0x80`, читает uptime, делает `SYS_EXIT` (3).
+5. Gate `0x80` с **DPL3** (`0xEE`), иначе ring3 получит GP fault.
+6. IRQ/syscall stubs переключают `DS` на kernel (`0x10`) — после входа в user `DS` был `0x23`.
+
+**Ловушки, на которых споткнулись:**
+- BSS/`kernel_esp_save` после `objcopy` нет в образе → fixed RAM (`0x62200`).
+- TSS.esp0 = стек kmain → `int 0x80` затирает сохранённый ESP → нет возврата «back from user».
+- User blob копируется в `0x40000` (`user_blob.h` генерит `build.ps1`).
+
+**Код:** `userland.asm`, `user.asm`, GDT/TSS/`enter_userland` в `main.c`, `SYS_EXIT` → `exit_userland`.
+
+**Проверка:** smoke — `hello from ring3` + `back from user`; в shell — `run`.
+
+**Чему учит:** RPL/DPL, зачем отдельный TSS-стек, граница user/kernel.
+
+---
+
+## P9 — User-программа из ramfs
+
+**Идея:** «файл» в RAM → скопировать в адрес user → `iret` в ring3. Как крошечный `exec`.
+
+1. **`ramfs_put` / `ramfs_get`** — запись/чтение с явной длиной (бинарь может содержать `0x00`).
+2. При старте: `ramfs_put("hello", user_blob, len)` — сид из встроенного `user.asm`.
+3. **`run` / `run <name>`** → `ramfs_get` в `0x40000` → `enter_userland`.
+4. Пул файлов в fixed RAM (`0x63000`) — снова ловушка BSS/`objcopy`.
+
+**Код:** `ramfs.c` (`put`/`get`), `main.c` (`run_from_ramfs`).  
+Текст по-прежнему через `write`/`cat`; бинарь — через `put` (пока сид ядром).
+
+**Проверка:** при буте `loaded hello …` + `hello from ring3`; `ls` видит `hello`; `run` / `run hello` снова.
+
+**Чему учит:** загрузчик vs FS, почему `strlen` плох для бинаря, путь к настоящему `exec`.
+
+---
+
 ## Словарь
 
 - **Syscall** — официальный вход из «приложения» в ядро.
+- **Ring 0 / Ring 3** — уровни привилегий CPU (ядро / user).
+- **TSS** — структура для стека ядра при входе из user.
 
 - **Freestanding** — нет ОС под нами, нет обычной libc.
 - **Scancode** — сырой код клавиши с контроллера, не буква.
