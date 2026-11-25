@@ -1,4 +1,6 @@
-/* Diskus P5 — IRQ keyboard ring + cooperative tasks */
+/* Diskus P6 — IRQ kbd + tasks + ramfs */
+#include "ramfs.h"
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -254,11 +256,67 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks\n");
+  puts("commands: help clear about echo uptime tasks ls cat write\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P5 - IRQ1 kbd ring + cooperative tasks\n");
+  puts("Diskus kernel P6 - ramfs + IRQ1 + cooperative tasks\n");
+}
+
+static void ls_emit(const char *name, u32 size) {
+  puts("  ");
+  puts(name);
+  puts("  ");
+  put_u32(size);
+  puts("\n");
+}
+
+static void cmd_ls(void) {
+  puts("ramfs:\n");
+  ramfs_list(ls_emit);
+}
+
+static void cmd_cat(const char *name) {
+  char buf[RAMFS_DATA + 1];
+  if (ramfs_read(name, buf, sizeof(buf)) < 0) {
+    puts("no such file\n");
+    return;
+  }
+  puts(buf);
+  if (buf[0] && buf[0] != '\n') {
+    /* ensure newline if file had none */
+  }
+}
+
+static void cmd_write(char *args) {
+  /* write <name> <text...> */
+  while (*args == ' ')
+    args++;
+  if (!*args) {
+    puts("usage: write <name> <text>\n");
+    return;
+  }
+  char *name = args;
+  while (*args && *args != ' ')
+    args++;
+  if (*args) {
+    *args = 0;
+    args++;
+  }
+  while (*args == ' ')
+    args++;
+  if (!*args) {
+    puts("usage: write <name> <text>\n");
+    return;
+  }
+  int n = ramfs_write(name, args);
+  if (n < 0) {
+    puts(n == -2 ? "ramfs full\n" : "write fail\n");
+    return;
+  }
+  puts("wrote ");
+  put_u32((u32)n);
+  puts(" bytes\n");
 }
 
 static void cmd_uptime(void) {
@@ -321,6 +379,26 @@ static void run_line(char *line) {
   }
   if (streq(line, "tasks")) {
     cmd_tasks();
+    return;
+  }
+  if (streq(line, "ls")) {
+    cmd_ls();
+    return;
+  }
+  if (starts_with(line, "cat ")) {
+    cmd_cat(line + 4);
+    return;
+  }
+  if (streq(line, "cat")) {
+    puts("usage: cat <name>\n");
+    return;
+  }
+  if (starts_with(line, "write ")) {
+    cmd_write(line + 6);
+    return;
+  }
+  if (streq(line, "write")) {
+    puts("usage: write <name> <text>\n");
     return;
   }
   if (starts_with(line, "echo ")) {
@@ -424,21 +502,14 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P5 IRQ1 + cooperative tasks\n");
+  puts("P6 ramfs\n");
   interrupts_init();
-  puts("irq ok\n");
   tasks_init();
-  puts("tasks ok\n");
+  ramfs_init();
 
   u32 start = ticks;
-  u32 spins = 0;
-  while (ticks - start < 20) {
-    spins++;
-    if (spins > 200000000u) {
-      puts("timer fail\n");
-      break;
-    }
-  }
+  while (ticks - start < 15)
+    __asm__ volatile("hlt");
   puts("ticks ");
   put_u32(ticks);
   puts("\n");

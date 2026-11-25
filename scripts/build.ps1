@@ -58,9 +58,14 @@ $idtO = Join-Path $Out 'idt.o'
 & $nasm -f elf32 (Join-Path $Root 'kernel\idt.asm') -o $idtO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$cflags = @('-target', 'x86-freestanding-none', '-ffreestanding', '-fno-stack-protector', '-fno-pic', '-O2', '-I', (Join-Path $Root 'kernel'))
+
 $mainO = Join-Path $Out 'main.o'
-& $zig cc -target x86-freestanding-none -ffreestanding -fno-stack-protector -fno-pic -O2 `
-    -c (Join-Path $Root 'kernel\main.c') -o $mainO
+& $zig cc @cflags -c (Join-Path $Root 'kernel\main.c') -o $mainO
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+$ramfsO = Join-Path $Out 'ramfs.o'
+& $zig cc @cflags -c (Join-Path $Root 'kernel\ramfs.c') -o $ramfsO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $kernelElf = Join-Path $Out 'kernel.elf'
@@ -71,9 +76,9 @@ if (-not (Test-Path $lld)) {
         Select-Object -First 1 -ExpandProperty FullName
 }
 if (-not $lld) {
-    & $zig ld.lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf --oformat=elf $entryO $idtO $mainO
+    & $zig ld.lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf --oformat=elf $entryO $idtO $mainO $ramfsO
 } else {
-    & $lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf $entryO $idtO $mainO
+    & $lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf $entryO $idtO $mainO $ramfsO
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
