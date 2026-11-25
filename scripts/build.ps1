@@ -54,6 +54,10 @@ $entryO = Join-Path $Out 'entry.o'
 & $nasm -f elf32 (Join-Path $Root 'kernel\entry.asm') -o $entryO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$idtO = Join-Path $Out 'idt.o'
+& $nasm -f elf32 (Join-Path $Root 'kernel\idt.asm') -o $idtO
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $mainO = Join-Path $Out 'main.o'
 & $zig cc -target x86-freestanding-none -ffreestanding -fno-stack-protector -fno-pic -O2 `
     -c (Join-Path $Root 'kernel\main.c') -o $mainO
@@ -67,10 +71,9 @@ if (-not (Test-Path $lld)) {
         Select-Object -First 1 -ExpandProperty FullName
 }
 if (-not $lld) {
-    # zig ld.lld subcommand
-    & $zig ld.lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf --oformat=elf $entryO $mainO
+    & $zig ld.lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf --oformat=elf $entryO $idtO $mainO
 } else {
-    & $lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf $entryO $mainO
+    & $lld -m elf_i386 -T (Join-Path $Root 'kernel\linker.ld') -o $kernelElf $entryO $idtO $mainO
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

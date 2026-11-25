@@ -1,21 +1,20 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P3 — Keyboard + shell** — автосмоук OK → окно → «ок»
+**P4 — IDT + PIT timer** — автосмоук OK → окно → «ок»
 
 ## Чеклист
-- [x] PS/2 scancode + serial input
-- [x] Shell: `help` / `clear` / `about` / `echo`
-- [x] Автосмоук: prompt на serial
-- [ ] Кликни в QEMU, набери `help` → «ок»
+- [x] IDT + PIC remap, IRQ0
+- [x] PIT ~100 Hz, `ticks`
+- [x] Shell: `uptime`
+- [x] Автосмоук: `ticks N`
+- [ ] В QEMU: `uptime` / `help` → «ок»
 
 ## Закрыто
-- P0 Boot — ✅
-- P1 Protected mode — ✅
-- P2 C kernel + VGA — ✅
+- P0–P3 — ✅
 
 ## Дальше
-- P4 — (после «ок») таймер / IDT lite
+- P5 — (после «ок») больше IRQ / multitask lite
 
 ## Парковка
-- UEFI / Limine / FS / Desktop bridge / Rust
+- UEFI / Limine / FS / Desktop / Rust
