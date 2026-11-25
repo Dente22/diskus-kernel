@@ -274,6 +274,18 @@ cat note
 
 ---
 
+## Среда: WSL2 `DiskusUbuntu`
+
+Эксперименты удобно вести из Linux-VM (WSL2), см. **`VM.md`**:
+
+```bash
+wsl -d DiskusUbuntu
+cd /mnt/c/Users/desk-kiosk/Desktop/diskus-kernel
+./scripts/build.sh && ./scripts/run.sh --smoke
+```
+
+---
+
 ## Как пользоваться этим файлом
 
 После каждой фазы сюда дописывается: *что добавили*, *зачем*, *где в коде*, *как проверить*.  

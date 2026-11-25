@@ -1,21 +1,24 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**—** фаза не выбрана (P10c закрыт)
+**VM — среда для экспериментов** — виртуалка + туда репо/тулзы/QEMU
 
 ## Чеклист
-- (пусто)
+- [x] WSL2 вместо VirtualBox (Hyper-V уже был)
+- [x] Distro `DiskusUbuntu` (Ubuntu 24.04)
+- [x] git, nasm, qemu, zig 0.17.1
+- [x] `build.sh` + smoke внутри VM (SMOKE OK)
+- [x] `VM.md` + `scripts/vm-setup.sh` / `build.sh` / `run.sh`
+- [ ] «ок» → push
 
 ## Закрыто
-- P0–P10c — ✅ … → preemptive → dual user → **DKFS с диска (ATA PIO)**
+- P0–P10c — ✅
 
-## Кандидаты
-- page tables / больше syscall / shell polish
-- или скажи свою идею
+## Дальше
+- (после VM) — следующие фазы ядра уже из виртуалки
 
 ## Парковка
-- **Виртуалка (Hyper-V / VMware / VirtualBox) для Diskus** — когда глубже займёмся ОС
-- UEFI / Limine / Desktop / Rust / full disk FS
+- UEFI / Limine / Desktop / Rust / page tables / full disk FS
 
 ## Правило
 Каждую фазу дописывать в **`LEARN.md`**.  

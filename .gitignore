@@ -1,5 +1,6 @@
 /build/
 /tools/zig/
+/tools/zig-linux/
 kernel/user_blob.h
 *.bin
 *.img
