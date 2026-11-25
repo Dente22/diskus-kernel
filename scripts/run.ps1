@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P6' -and $text -match 'ticks' -and $text -match '>') {
+        if ($text -match 'P7' -and $text -match 'syscall path OK' -and $text -match '>') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P6 on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P7 syscall on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

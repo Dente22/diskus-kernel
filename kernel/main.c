@@ -1,11 +1,18 @@
-/* Diskus P6 — IRQ kbd + tasks + ramfs */
+/* Diskus P7 — syscalls (int 0x80) + ramfs + tasks */
 #include "ramfs.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 
-enum { VGA_COLS = 80, VGA_ROWS = 25, TIMER_HZ = 100, NTASKS = 2 };
+enum {
+  VGA_COLS = 80,
+  VGA_ROWS = 25,
+  TIMER_HZ = 100,
+  NTASKS = 2,
+  SYS_WRITE = 1,
+  SYS_UPTIME = 2,
+};
 
 static volatile u16 *const VGA = (volatile u16 *)0xB8000;
 static u32 cursor;
@@ -14,10 +21,15 @@ static volatile u32 ticks;
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
+extern void syscall_stub(void);
 extern void load_idt(void *idtp);
 extern void irq_sti(void);
 extern void irq_cli(void);
 extern void yield(void);
+
+static void puts(const char *s);
+static void put_u32(u32 n);
+static void vga_putc(char c);
 
 struct idt_entry {
   u16 base_lo;
@@ -120,6 +132,7 @@ static void interrupts_init(void) {
     idt_set((u8)i, 0, 0x08, 0);
   idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
   idt_set(33, (u32)irq1_stub, 0x08, 0x8E);
+  idt_set(0x80, (u32)syscall_stub, 0x08, 0x8E); /* software interrupt */
   idtp.limit = sizeof(idt) - 1;
   idtp.base = (u32)&idt;
   load_idt(&idtp);
@@ -127,6 +140,34 @@ static void interrupts_init(void) {
   pit_init(TIMER_HZ);
   ticks = 0;
   irq_sti();
+}
+
+/* Called from asm int 0x80: num=eax, arg1=ebx, arg2=ecx, arg3=edx */
+u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
+  (void)arg3;
+  if (num == SYS_WRITE) {
+    const char *p = (const char *)arg1;
+    u32 len = arg2;
+    for (u32 i = 0; i < len && p; i++)
+      vga_putc(p[i]);
+    return len;
+  }
+  if (num == SYS_UPTIME)
+    return ticks;
+  return (u32)-1;
+}
+
+static u32 dosyscall(u32 num, u32 a, u32 b, u32 c) {
+  u32 ret;
+  __asm__ volatile("int $0x80" : "=a"(ret) : "a"(num), "b"(a), "c"(b), "d"(c) : "memory");
+  return ret;
+}
+
+static u32 strlen_s(const char *s) {
+  u32 n = 0;
+  while (s[n])
+    n++;
+  return n;
 }
 
 static void serial_putc(char c) {
@@ -174,6 +215,10 @@ static void vga_putc(char c) {
 static void puts(const char *s) {
   while (*s)
     vga_putc(*s++);
+}
+
+static void sys_puts(const char *s) {
+  dosyscall(SYS_WRITE, (u32)s, strlen_s(s), 0);
 }
 
 static void put_u32(u32 n) {
@@ -256,11 +301,19 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks ls cat write\n");
+  puts("commands: help clear about echo uptime tasks ls cat write sysdemo\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P6 - ramfs + IRQ1 + cooperative tasks\n");
+  puts("Diskus kernel P7 - int 0x80 syscalls + ramfs + tasks\n");
+}
+
+static void cmd_sysdemo(void) {
+  sys_puts("hello from int 0x80 SYS_write\n");
+  u32 t = dosyscall(SYS_UPTIME, 0, 0, 0);
+  puts("SYS_uptime => ");
+  put_u32(t);
+  puts(" ticks\n");
 }
 
 static void ls_emit(const char *name, u32 size) {
@@ -379,6 +432,10 @@ static void run_line(char *line) {
   }
   if (streq(line, "tasks")) {
     cmd_tasks();
+    return;
+  }
+  if (streq(line, "sysdemo")) {
+    cmd_sysdemo();
     return;
   }
   if (streq(line, "ls")) {
@@ -502,7 +559,7 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P6 ramfs\n");
+  puts("P7 syscalls\n");
   interrupts_init();
   tasks_init();
   ramfs_init();
@@ -513,6 +570,7 @@ void kmain(void) {
   puts("ticks ");
   put_u32(ticks);
   puts("\n");
+  sys_puts("syscall path OK\n");
 
   shell();
 }

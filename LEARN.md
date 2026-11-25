@@ -139,7 +139,30 @@ cat note
 
 ---
 
+## P7 — Syscalls (`int 0x80`)
+
+**Идея:** программа не пишет в VGA напрямую «как ядро», а просит сервис через прерывание.
+
+| Номер | Имя | Аргументы | Результат |
+|------|-----|-----------|-----------|
+| 1 | `SYS_write` | `ebx`=указатель, `ecx`=длина | число байт |
+| 2 | `SYS_UPTIME` | — | `ticks` в `eax` |
+
+**Поток:**
+1. C: `dosyscall` → `int $0x80` (eax/ebx/ecx/edx).
+2. IDT[0x80] → `syscall_stub` (asm) → `syscall_dispatch` (C).
+3. `iret` назад, ответ в `eax`.
+
+**Код:** `kernel/idt.asm` (`syscall_stub`), `main.c` (`syscall_dispatch`, `sysdemo`).  
+Пока всё в ring 0 (учебный шаг). Настоящий user mode (ring 3) — следующая ступень.
+
+**Проверка:** при буте строка `syscall path OK`; в shell — `sysdemo`.
+
+---
+
 ## Словарь
+
+- **Syscall** — официальный вход из «приложения» в ядро.
 
 - **Freestanding** — нет ОС под нами, нет обычной libc.
 - **Scancode** — сырой код клавиши с контроллера, не буква.

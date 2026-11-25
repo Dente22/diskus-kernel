@@ -1,20 +1,20 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P6 — Tiny ramfs** — автосмоук OK → окно → «ок»
+**P7 — Syscalls lite** — автосмоук OK → окно → «ок»
 
 ## Чеклист
-- [x] ramfs pool
-- [x] `ls` / `cat` / `write`
-- [x] LEARN.md P6
-- [x] Автосмоук
-- [ ] В QEMU: `ls` `cat readme` `write` → «ок»
+- [x] `int 0x80` + `syscall_dispatch`
+- [x] SYS_write / SYS_uptime
+- [x] boot demo + shell `sysdemo`
+- [x] LEARN.md P7
+- [ ] В QEMU: `sysdemo` → «ок»
 
 ## Закрыто
-- P0–P5 — ✅
+- P0–P6 — ✅
 
 ## Дальше
-- P7 — syscall / user mode lite
+- P8 — user ring / apps
 
 ## Парковка
 - UEFI / Limine / Desktop / Rust / preemptive / disk FS
