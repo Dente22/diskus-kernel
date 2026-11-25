@@ -2,15 +2,15 @@
 
 Hobby OS с нуля (BYOX-стиль). **Не** Diskus Desktop / хаб — отдельный учебный kernel.
 
-## Сейчас: P2 — C kernel
+- **`FOCUS.md`** — что делаем сейчас  
+- **`LEARN.md`** — как это работает (учись параллельно по фазам)
 
-Boot грузит kernel с диска → protected mode → `kmain` печатает `Diskus C`.
+## Запуск
 
 ```powershell
-winget install NASM.NASM SoftwareFreedomConservancy.QEMU
-# Zig: portable в tools\zig  (или winget install zig.zig)
 .\scripts\build.ps1
-.\scripts\run.ps1
+.\scripts\run.ps1          # окно QEMU
+.\scripts\run.ps1 -Smoke   # serial-проверка
 ```
 
-Смоук: `.\scripts\run.ps1 -Smoke` → `Diskus C`. См. `FOCUS.md`.
+NASM + QEMU + Zig (`tools\zig` или winget).
