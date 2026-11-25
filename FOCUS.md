@@ -1,23 +1,19 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P0 — Boot sector** — смоук в QEMU → ждём «ок»
+**P1 — Protected mode** — автосмоук OK → окно QEMU → «ок»
 
 ## Чеклист
-- [x] `boot/boot.asm` — BIOS VGA + COM1
-- [x] Сборка → `build/diskus.img` (512 байт)
-- [x] `scripts/build.ps1` + `scripts/run.ps1 -Smoke`
-- [x] Автосмоук: serial вывел `Diskus`
-- [ ] Ты увидел в окне QEMU → «ок»
+- [x] GDT (null / code / data)
+- [x] A20 + switch CR0.PE
+- [x] Far jump в 32-bit, печать `Diskus PM`
+- [x] Автосмоук serial
+- [ ] Ты видишь в окне → «ок»
 
-### Смоук руками
-```powershell
-.\scripts\run.ps1
-```
-В окне: `Diskus` / `kernel P0 - boot OK`. Закрой QEMU → напиши «ок».
+## Закрыто
+- P0 Boot sector (VGA+COM1, QEMU) — ✅
 
-## Дальше (не трогать до «ок»)
-- P1 — second stage / protected mode
+## Дальше
 - P2 — C kernel + VGA
 - P3 — keyboard + simple shell
 

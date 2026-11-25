@@ -48,20 +48,20 @@ if ($Smoke) {
         Start-Sleep -Milliseconds 200
         while (-not $p.StandardOutput.EndOfStream) {
             $buf += [char]$p.StandardOutput.Read()
-            if ($buf -match 'Diskus') { break }
+            if ($buf -match 'Diskus PM') { break }
         }
-        if ($buf -match 'Diskus') { break }
+        if ($buf -match 'Diskus PM') { break }
         if ($p.HasExited) { break }
     }
     if (-not $p.HasExited) {
         try { $p.Kill() } catch {}
     }
     Write-Host $buf
-    if ($buf -match 'Diskus') {
+    if ($buf -match 'Diskus PM') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL — no Diskus on serial. Got: $buf"
+    Write-Error "SMOKE FAIL — no 'Diskus PM' on serial. Got: $buf"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c
