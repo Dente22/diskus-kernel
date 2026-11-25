@@ -1,4 +1,4 @@
-/* Diskus P10a — preemptive multitasking from IRQ0 */
+/* Diskus P10b — second user program in ramfs */
 #include "ramfs.h"
 #include "user_blob.h"
 
@@ -378,11 +378,11 @@ static int starts_with(const char *s, const char *p) {
 
 static void cmd_help(void) {
   puts("commands: help clear about echo uptime tasks ls cat write sysdemo run\n");
-  puts("  run [name]  — load program from ramfs (default: hello)\n");
+  puts("  run [name]  — hello|bye from ramfs (default: hello)\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P10a - preemptive tasks + ramfs user\n");
+  puts("Diskus kernel P10b - hello/bye user progs in ramfs\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -654,7 +654,7 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P10a preempt\n");
+  puts("P10b users\n");
   gdt_tss_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);
@@ -671,6 +671,7 @@ void kmain(void) {
   tasks_init();
   ramfs_init();
   ramfs_put("hello", user_blob, user_blob_len);
+  ramfs_put("bye", user2_blob, user2_blob_len);
 
   preempt_enabled = 1;
   u32 sw0 = task_switches;
@@ -682,6 +683,7 @@ void kmain(void) {
 
   puts("user from ramfs...\n");
   run_from_ramfs("hello");
+  run_from_ramfs("bye");
 
   shell();
 }
