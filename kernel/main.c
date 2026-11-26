@@ -1,4 +1,4 @@
-/* Diskus P17 — desktop window + mouse */
+/* Diskus P18 — multi-window desktop + mouse */
 #include "desktop.h"
 #include "disk.h"
 #include "gfx.h"
@@ -514,13 +514,13 @@ static int starts_with(const char *s, const char *p) {
 
 static void cmd_help(void) {
   puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui m win\n");
-  puts("  ui [1|2]  — Yes/No in window\n");
+  puts("  ui [1|2]  — Yes/No in App window\n");
   puts("  m <l|r|u|d|click> — cursor\n");
-  puts("  win <l|r|u|d|desk> — move window / redraw desktop\n");
+  puts("  win <l|r|u|d|desk|open> — top window / redraw / reopen\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P17 - desktop window\n");
+  puts("Diskus kernel P18 - multi-window desktop\n");
 }
 
 static void cmd_ui(const char *args) {
@@ -569,6 +569,12 @@ static void cmd_win(const char *args) {
     puts("desktop ok\n");
     return;
   }
+  if (streq(args, "open")) {
+    desktop_open_all();
+    mouse_cursor_redraw();
+    puts("win open\n");
+    return;
+  }
   if (args[0] == 'l')
     desktop_nudge_win(-12, 0);
   else if (args[0] == 'r')
@@ -578,7 +584,7 @@ static void cmd_win(const char *args) {
   else if (args[0] == 'd')
     desktop_nudge_win(0, 12);
   else {
-    puts("usage: win l|r|u|d|desk\n");
+    puts("usage: win l|r|u|d|desk|open\n");
     return;
   }
   mouse_cursor_redraw();
@@ -793,7 +799,7 @@ static void shell(void) {
   u32 len = 0;
 
   puts("Diskus shell - type help\n");
-  puts("input: serial; win l/r/u/d | m click | ui 1/2\n");
+  puts("input: serial; win open/l/r | m click | ui 1/2\n");
   puts("> ");
 
   for (;;) {
@@ -968,9 +974,12 @@ static void tasks_init(void) {
 
 void kmain(void) {
   gfx_clear(0);
-  desktop_init();
   puts("Diskus C\n");
-  puts("P17 desktop\n");
+  puts("P18 windows\n");
+  desktop_init();
+  puts("init ok\n");
+  desktop_draw();
+  puts("desktop on\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();

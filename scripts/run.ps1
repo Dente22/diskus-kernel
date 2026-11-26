@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P17' -and $text -match 'paging on' -and $text -match 'spawned' -and $text -match 'user done') {
+        if ($text -match 'P18' -and $text -match 'paging on' -and $text -match 'spawned' -and $text -match 'user done') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P17 desktop on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P18 windows on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c -vga std -serial stdio

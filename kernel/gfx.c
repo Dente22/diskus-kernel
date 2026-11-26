@@ -21,9 +21,27 @@ void gfx_clear(u8 color) {
 }
 
 void gfx_fill_rect(int x, int y, int w, int h, u8 color) {
-  for (int j = 0; j < h; j++)
+  if (w <= 0 || h <= 0)
+    return;
+  if (x < 0) {
+    w += x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    y = 0;
+  }
+  if (x + w > GFX_W)
+    w = GFX_W - x;
+  if (y + h > GFX_H)
+    h = GFX_H - y;
+  if (w <= 0 || h <= 0)
+    return;
+  for (int j = 0; j < h; j++) {
+    volatile u8 *row = FB + (y + j) * GFX_W + x;
     for (int i = 0; i < w; i++)
-      gfx_putpixel(x + i, y + j, color);
+      row[i] = color;
+  }
 }
 
 void gfx_rect(int x, int y, int w, int h, u8 color) {

@@ -1,64 +1,151 @@
-/* Diskus P17 — single draggable window on a flat desktop */
+/* Diskus P18 — multi-window desktop, z-order, close */
 #include "desktop.h"
 #include "gfx.h"
 #include "ui.h"
 
 enum {
+  NWIN = 2,
   TITLE_H = 12,
-  WIN_W = 180,
-  WIN_H = 88,
-  BTN_W = 56,
-  BTN_H = 16,
+  CLOSE_S = 10,
+  BTN_W = 48,
+  BTN_H = 14,
+  KIND_APP = 0,
+  KIND_HELP = 1,
 };
 
-static int win_x = 40;
-static int win_y = 16;
-static int dragging;
-static int grab_dx, grab_dy;
-static u8 prev_left;
-static int btn_yes = UI_BTN_FOCUS;
-static int btn_no = UI_BTN_NORMAL;
+struct win {
+  int x, y, w, h;
+  u8 alive;
+  u8 kind;
+  char title[8];
+};
 
-static int btn_yes_x(void) { return win_x + 12; }
-static int btn_yes_y(void) { return win_y + TITLE_H + 28; }
-static int btn_no_x(void) { return win_x + 76; }
-static int btn_no_y(void) { return win_y + TITLE_H + 28; }
-
-static void clamp_win(void) {
-  if (win_x < 0)
-    win_x = 0;
-  if (win_y < 0)
-    win_y = 0;
-  if (win_x + WIN_W > GFX_W)
-    win_x = GFX_W - WIN_W;
-  if (win_y + WIN_H > GFX_TEXT_ROW0 * 8)
-    win_y = GFX_TEXT_ROW0 * 8 - WIN_H;
-  if (win_y < 0)
-    win_y = 0;
-}
+/* Fixed RAM — objcopy drops .bss; keep state inside loaded pad like main.c tables */
+#define WINS ((struct win *)0x00068000)
+#define ZORDER ((u8 *)0x00068100)
+#define DSTATE ((u8 *)0x00068110) /* [0]=drag_id+1, [1]=prev_left, [2]=btn_yes, [3]=btn_no, [4]=grab_dx lo... */
+/* keep grab in ints at 0x68120 */
+#define GRAB_DX (*(int *)0x00068120)
+#define GRAB_DY (*(int *)0x00068124)
+#define DRAG_ID (*(int *)0x00068128)
 
 static int in_rect(int x, int y, int rx, int ry, int rw, int rh) {
   return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
+}
+
+static void clamp_win(struct win *w) {
+  int max_y = GFX_TEXT_ROW0 * 8;
+  if (w->x < 0)
+    w->x = 0;
+  if (w->y < 0)
+    w->y = 0;
+  if (w->x + w->w > GFX_W)
+    w->x = GFX_W - w->w;
+  if (w->y + w->h > max_y)
+    w->y = max_y - w->h;
+  if (w->y < 0)
+    w->y = 0;
+}
+
+static void raise_win(int id) {
+  int slot = -1;
+  for (int i = 0; i < NWIN; i++) {
+    if ((int)ZORDER[i] == id) {
+      slot = i;
+      break;
+    }
+  }
+  if (slot <= 0)
+    return;
+  for (int i = slot; i > 0; i--)
+    ZORDER[i] = ZORDER[i - 1];
+  ZORDER[0] = (u8)id;
+}
+
+static int topmost_alive(void) {
+  for (int i = 0; i < NWIN; i++) {
+    int id = (int)ZORDER[i];
+    if (WINS[id].alive)
+      return id;
+  }
+  return -1;
+}
+
+static int hit_win(int x, int y) {
+  for (int i = 0; i < NWIN; i++) {
+    int id = (int)ZORDER[i];
+    struct win *w = &WINS[id];
+    if (!w->alive)
+      continue;
+    if (in_rect(x, y, w->x, w->y, w->w, w->h))
+      return id;
+  }
+  return -1;
+}
+
+static void close_rect(struct win *w, int *cx, int *cy) {
+  *cx = w->x + w->w - CLOSE_S - 2;
+  *cy = w->y + 1;
+}
+
+static void draw_close(struct win *w) {
+  int cx, cy;
+  close_rect(w, &cx, &cy);
+  gfx_fill_rect(cx, cy, CLOSE_S, CLOSE_S, 4);
+  gfx_rect(cx, cy, CLOSE_S, CLOSE_S, 15);
+  gfx_putpixel(cx + 2, cy + 2, 15);
+  gfx_putpixel(cx + 3, cy + 3, 15);
+  gfx_putpixel(cx + 4, cy + 4, 15);
+  gfx_putpixel(cx + 5, cy + 5, 15);
+  gfx_putpixel(cx + 6, cy + 6, 15);
+  gfx_putpixel(cx + 6, cy + 2, 15);
+  gfx_putpixel(cx + 5, cy + 3, 15);
+  gfx_putpixel(cx + 3, cy + 5, 15);
+  gfx_putpixel(cx + 2, cy + 6, 15);
+}
+
+static void set_title(struct win *w, const char *s) {
+  int i = 0;
+  while (s[i] && i < 7) {
+    w->title[i] = s[i];
+    i++;
+  }
+  w->title[i] = 0;
+}
+
+static void draw_one(struct win *w, int focused) {
+  u8 title_bg = focused ? (u8)9 : (u8)8;
+  int btn_yes = (int)DSTATE[2];
+  int btn_no = (int)DSTATE[3];
+  ui_panel_title(w->x, w->y, w->w, w->h, w->title, 7, 15, title_bg, 15);
+  draw_close(w);
+
+  if (w->kind == KIND_APP) {
+    ui_button(w->x + 8, w->y + TITLE_H + 24, BTN_W, BTN_H, "Yes", btn_yes);
+    ui_button(w->x + 64, w->y + TITLE_H + 24, BTN_W, BTN_H, "No", btn_no);
+  } else {
+    gfx_set_cursor((u32)((w->x + 8) / 8), (u32)((w->y + TITLE_H + 16) / 8));
+    gfx_puts_bg("z-order", 0, 7);
+    gfx_set_cursor((u32)((w->x + 8) / 8), (u32)((w->y + TITLE_H + 28) / 8));
+    gfx_puts_bg("x=close", 0, 7);
+  }
 }
 
 void desktop_draw(void) {
   u32 save_c, save_r;
   gfx_get_cursor(&save_c, &save_r);
 
-  /* wallpaper */
-  for (int y = 0; y < GFX_TEXT_ROW0 * 8; y++)
-    for (int x = 0; x < GFX_W; x++)
-      gfx_putpixel(x, y, (u8)(1 + ((x / 40 + y / 20) & 1)));
+  gfx_fill_rect(0, 0, GFX_W, GFX_TEXT_ROW0 * 8, 1);
+  for (int y = 0; y < GFX_TEXT_ROW0 * 8; y += 20)
+    gfx_fill_rect(0, y, GFX_W, 10, 2);
 
-  clamp_win();
-  ui_panel_title(win_x, win_y, WIN_W, WIN_H, "P17 desktop", 7, 15, 9, 15);
-
-  /* client hint */
-  gfx_set_cursor((u32)((win_x + 8) / 8), (u32)((win_y + TITLE_H + 6) / 8));
-  gfx_puts_bg("drag title", 0, 7);
-
-  ui_button(btn_yes_x(), btn_yes_y(), BTN_W, BTN_H, "Yes", btn_yes);
-  ui_button(btn_no_x(), btn_no_y(), BTN_W, BTN_H, "No", btn_no);
+  for (int i = NWIN - 1; i >= 0; i--) {
+    int id = (int)ZORDER[i];
+    if (!WINS[id].alive)
+      continue;
+    clamp_win(&WINS[id]);
+    draw_one(&WINS[id], i == 0);
+  }
 
   if (save_r < (u32)GFX_TEXT_ROW0)
     gfx_set_cursor(0, GFX_TEXT_ROW0);
@@ -67,62 +154,105 @@ void desktop_draw(void) {
 }
 
 void desktop_init(void) {
-  win_x = 40;
-  win_y = 16;
-  dragging = 0;
-  prev_left = 0;
-  btn_yes = UI_BTN_FOCUS;
-  btn_no = UI_BTN_NORMAL;
+  WINS[0].x = 20;
+  WINS[0].y = 8;
+  WINS[0].w = 140;
+  WINS[0].h = 80;
+  WINS[0].alive = 1;
+  WINS[0].kind = KIND_APP;
+  set_title(&WINS[0], "App");
+
+  WINS[1].x = 100;
+  WINS[1].y = 28;
+  WINS[1].w = 120;
+  WINS[1].h = 70;
+  WINS[1].alive = 1;
+  WINS[1].kind = KIND_HELP;
+  set_title(&WINS[1], "Help");
+
+  ZORDER[0] = 1;
+  ZORDER[1] = 0;
+  DRAG_ID = -1;
+  DSTATE[1] = 0;
+  DSTATE[2] = (u8)UI_BTN_FOCUS;
+  DSTATE[3] = (u8)UI_BTN_NORMAL;
+}
+
+void desktop_open_all(void) {
+  for (int i = 0; i < NWIN; i++)
+    WINS[i].alive = 1;
   desktop_draw();
 }
 
 void desktop_press(int which) {
   if (which == 0) {
-    btn_yes = UI_BTN_PRESSED;
-    btn_no = UI_BTN_NORMAL;
+    DSTATE[2] = (u8)UI_BTN_PRESSED;
+    DSTATE[3] = (u8)UI_BTN_NORMAL;
   } else if (which == 1) {
-    btn_no = UI_BTN_PRESSED;
-    btn_yes = UI_BTN_NORMAL;
+    DSTATE[3] = (u8)UI_BTN_PRESSED;
+    DSTATE[2] = (u8)UI_BTN_NORMAL;
   } else {
-    btn_yes = UI_BTN_FOCUS;
-    btn_no = UI_BTN_NORMAL;
+    DSTATE[2] = (u8)UI_BTN_FOCUS;
+    DSTATE[3] = (u8)UI_BTN_NORMAL;
   }
   desktop_draw();
 }
 
 void desktop_nudge_win(int dx, int dy) {
-  win_x += dx;
-  win_y += dy;
-  clamp_win();
+  int id = topmost_alive();
+  if (id < 0)
+    return;
+  WINS[id].x += dx;
+  WINS[id].y += dy;
+  clamp_win(&WINS[id]);
   desktop_draw();
 }
 
 void desktop_pointer(int x, int y, u8 buttons) {
   u8 left = buttons & 1;
+  u8 prev_left = DSTATE[1];
 
   if (left && !prev_left) {
-    /* press */
-    if (in_rect(x, y, win_x, win_y, WIN_W, TITLE_H)) {
-      dragging = 1;
-      grab_dx = x - win_x;
-      grab_dy = y - win_y;
-    } else if (in_rect(x, y, btn_yes_x(), btn_yes_y(), BTN_W, BTN_H)) {
-      desktop_press(0);
-    } else if (in_rect(x, y, btn_no_x(), btn_no_y(), BTN_W, BTN_H)) {
-      desktop_press(1);
+    int id = hit_win(x, y);
+    if (id >= 0) {
+      raise_win(id);
+      struct win *w = &WINS[id];
+      int cx, cy;
+      close_rect(w, &cx, &cy);
+      if (in_rect(x, y, cx, cy, CLOSE_S, CLOSE_S)) {
+        w->alive = 0;
+        DRAG_ID = -1;
+        desktop_draw();
+      } else if (in_rect(x, y, w->x, w->y, w->w - CLOSE_S - 4, TITLE_H)) {
+        DRAG_ID = id;
+        GRAB_DX = x - w->x;
+        GRAB_DY = y - w->y;
+        desktop_draw();
+      } else if (w->kind == KIND_APP) {
+        int by = w->y + TITLE_H + 24;
+        if (in_rect(x, y, w->x + 8, by, BTN_W, BTN_H))
+          desktop_press(0);
+        else if (in_rect(x, y, w->x + 64, by, BTN_W, BTN_H))
+          desktop_press(1);
+        else
+          desktop_draw();
+      } else {
+        desktop_draw();
+      }
     }
-  } else if (left && dragging) {
-    int nx = x - grab_dx;
-    int ny = y - grab_dy;
-    if (nx != win_x || ny != win_y) {
-      win_x = nx;
-      win_y = ny;
-      clamp_win();
+  } else if (left && DRAG_ID >= 0) {
+    struct win *w = &WINS[DRAG_ID];
+    int nx = x - GRAB_DX;
+    int ny = y - GRAB_DY;
+    if (nx != w->x || ny != w->y) {
+      w->x = nx;
+      w->y = ny;
+      clamp_win(w);
       desktop_draw();
     }
   } else if (!left && prev_left) {
-    dragging = 0;
+    DRAG_ID = -1;
   }
 
-  prev_left = left;
+  DSTATE[1] = left;
 }
