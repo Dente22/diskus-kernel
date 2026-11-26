@@ -23,16 +23,16 @@ if [[ "${1:-}" == "--smoke" ]]; then
   sleep 0.3
   TEXT="$(cat "$LOG" 2>/dev/null || true)"
   printf '%s\n' "$TEXT"
-  if echo "$TEXT" | grep -q 'P16' && echo "$TEXT" | grep -q 'paging on' \
+  if echo "$TEXT" | grep -q 'P17' && echo "$TEXT" | grep -q 'paging on' \
     && echo "$TEXT" | grep -q 'spawned' && echo "$TEXT" | grep -q 'user done'; then
     echo 'SMOKE OK'
     exit 0
   fi
-  echo "SMOKE FAIL - no P16 mouse on serial. Got: $TEXT" >&2
+  echo "SMOKE FAIL - no P17 desktop on serial. Got: $TEXT" >&2
   exit 1
 fi
 
 echo "Type in THIS terminal (serial). QEMU window is display-only under WSL."
-echo "Cursor:  m l / m r / m u / m d / m click   or   ui 1 / ui 2"
+echo "Desktop: win l/r/u/d | m click | ui 1/2"
 exec qemu-system-i386 -drive "format=raw,file=$IMG" -boot order=c \
   -vga std -serial stdio

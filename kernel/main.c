@@ -1,4 +1,5 @@
-/* Diskus P16 — mouse + UI kit on Mode 13h */
+/* Diskus P17 — desktop window + mouse */
+#include "desktop.h"
 #include "disk.h"
 #include "gfx.h"
 #include "mouse.h"
@@ -512,27 +513,27 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui m\n");
-  puts("  run [name]  — hello|bye|cat from ramfs (default: hello)\n");
-  puts("  ui [1|2]    — redraw UI kit; 1=Yes 2=No pressed\n");
-  puts("  m <l|r|u|d|click> — move cursor / click (serial-friendly)\n");
+  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui m win\n");
+  puts("  ui [1|2]  — Yes/No in window\n");
+  puts("  m <l|r|u|d|click> — cursor\n");
+  puts("  win <l|r|u|d|desk> — move window / redraw desktop\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P16 - mouse click UI\n");
+  puts("Diskus kernel P17 - desktop window\n");
 }
 
 static void cmd_ui(const char *args) {
   while (*args == ' ')
     args++;
   if (*args == '1')
-    ui_demo_press(0);
+    desktop_press(0);
   else if (*args == '2')
-    ui_demo_press(1);
+    desktop_press(1);
   else
-    ui_demo_press(-1);
+    desktop_press(-1);
   mouse_cursor_redraw();
-  puts("ui kit ok\n");
+  puts("ui ok\n");
 }
 
 static void cmd_m(const char *args) {
@@ -557,6 +558,31 @@ static void cmd_m(const char *args) {
     return;
   }
   puts("m ok\n");
+}
+
+static void cmd_win(const char *args) {
+  while (*args == ' ')
+    args++;
+  if (!*args || streq(args, "desk")) {
+    desktop_draw();
+    mouse_cursor_redraw();
+    puts("desktop ok\n");
+    return;
+  }
+  if (args[0] == 'l')
+    desktop_nudge_win(-12, 0);
+  else if (args[0] == 'r')
+    desktop_nudge_win(12, 0);
+  else if (args[0] == 'u')
+    desktop_nudge_win(0, -12);
+  else if (args[0] == 'd')
+    desktop_nudge_win(0, 12);
+  else {
+    puts("usage: win l|r|u|d|desk\n");
+    return;
+  }
+  mouse_cursor_redraw();
+  puts("win ok\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -705,6 +731,14 @@ static void run_line(char *line) {
     cmd_m(line + 2);
     return;
   }
+  if (streq(line, "win")) {
+    cmd_win("");
+    return;
+  }
+  if (starts_with(line, "win ")) {
+    cmd_win(line + 4);
+    return;
+  }
   if (streq(line, "run")) {
     run_from_ramfs("hello");
     return;
@@ -759,7 +793,7 @@ static void shell(void) {
   u32 len = 0;
 
   puts("Diskus shell - type help\n");
-  puts("input: type in THIS terminal; m l/r/u/d/click or ui 1/2\n");
+  puts("input: serial; win l/r/u/d | m click | ui 1/2\n");
   puts("> ");
 
   for (;;) {
@@ -934,9 +968,9 @@ static void tasks_init(void) {
 
 void kmain(void) {
   gfx_clear(0);
-  ui_demo();
+  desktop_init();
   puts("Diskus C\n");
-  puts("P16 mouse\n");
+  puts("P17 desktop\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();

@@ -368,8 +368,26 @@ cat note
 
 ---
 
+## P17 — Desktop / окно
+
+**Идея:** не панель навсегда сверху, а **окно** на desktop, которое можно двигать.
+
+1. Wallpaper (шахматная заливка) над зоной shell.
+2. Окно: title bar + client; Yes/No внутри.
+3. **Drag** — зажать ЛКМ на title bar, двигать; `win l/r/u/d` без мыши.
+4. Shell снизу (`GFX_TEXT_ROW0`).
+
+**Код:** `kernel/desktop.c`.
+
+**Проверка:** `P17 desktop`; `win r` сдвигает окно; `ui 1` жмёт Yes.
+
+**Чему учит:** window = panel + состояние (x,y) + hit-test title vs buttons; drag = press/move/release.
+
+---
+
 ## Словарь
 
+- **Title bar** — полоска окна для drag / заголовка.
 - **PS/2 mouse** — классическая мышь через контроллер 8042, IRQ12.
 - **Hit-test** — попадание (x,y) в прямоугольник кнопки.
 - **UI kit** — набор виджетов (panel, button, label) на framebuffer.

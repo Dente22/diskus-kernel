@@ -1,23 +1,25 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P16 — мышь + клик** — закрыт
+**P17 — desktop / окна** — закрыт
 
 ## Чеклист
-- [x] PS/2 mouse init + IRQ12 packets
-- [x] Курсор на framebuffer (save-under)
-- [x] Клик по Yes/No → pressed
-- [x] LEARN.md P16
+- [x] Wallpaper + окно (title bar, client)
+- [x] Drag за title bar (мышь / `win l|r|u|d`)
+- [x] Yes/No внутри окна (клик)
+- [x] LEARN.md P17
 - [x] WSL smoke → «ок» → push
 
 ## Закрыто
-- P0–P16, VM — ✅
+- P0–P17, VM — ✅
 
 ## Дальше (визуальный трек)
-- desktop / окна
+- z-order / несколько окон, close
+# парковка: сгладить drag (dirty-rect вместо full redraw)
+
 
 ## Парковка
-- VBE/HD, UEFI, обои
+- VBE/HD, UEFI, обои-картинки
 
 ## Правило
 `LEARN.md` + push после пачки. Эксперименты — WSL.

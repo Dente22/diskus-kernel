@@ -1,7 +1,7 @@
-/* Diskus P16 — PS/2 mouse + save-under cursor on Mode 13h */
+/* Diskus P16/P17 — PS/2 mouse + save-under cursor on Mode 13h */
+#include "desktop.h"
 #include "gfx.h"
 #include "mouse.h"
-#include "ui.h"
 
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -70,7 +70,7 @@ static volatile u8 mready;
 static u8 under[CUR_W * CUR_H];
 static int cur_x = -1, cur_y = -1;
 static u8 cur_shown;
-static u8 prev_left;
+static u8 last_btns;
 
 static const u8 CURSOR[CUR_H][CUR_W] = {
     {1, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 0, 0, 0, 0, 0},
@@ -215,7 +215,7 @@ int mouse_init(void) {
   mready = 1;
   mx = 100;
   my = 45;
-  prev_left = 0;
+  last_btns = 0;
   return 0;
 }
 
@@ -234,21 +234,26 @@ void mouse_irq_handler(void) {
   }
 }
 
+void mouse_get_xy(int *x, int *y) {
+  if (x)
+    *x = mx;
+  if (y)
+    *y = my;
+}
+
+u8 mouse_get_buttons(void) { return mbuttons; }
+
 void mouse_poll(void) {
-  /* Bytes are drained by kbd_poll / IRQs → mouse_on_byte. Here: draw + click. */
+  /* Bytes drained by kbd_poll / IRQs. Here: cursor + desktop pointer. */
   if (!mready)
     return;
-  if (mdirty) {
-    mdirty = 0;
-    cursor_show(mx, my);
-  }
-  u8 left = mbuttons & 0x01;
-  if (left && !prev_left) {
-    cursor_hide();
-    (void)ui_demo_click(mx, my);
-    cursor_show(mx, my);
-  }
-  prev_left = left;
+  if (!mdirty && mbuttons == last_btns)
+    return;
+  mdirty = 0;
+  last_btns = mbuttons;
+  cursor_hide();
+  desktop_pointer(mx, my, mbuttons);
+  cursor_show(mx, my);
 }
 
 void mouse_nudge(int dx, int dy) {
@@ -274,6 +279,8 @@ void mouse_click_at_cursor(void) {
   if (!mready)
     return;
   cursor_hide();
-  (void)ui_demo_click(mx, my);
+  /* synthetic press + release at cursor */
+  desktop_pointer(mx, my, 1);
+  desktop_pointer(mx, my, 0);
   cursor_show(mx, my);
 }
