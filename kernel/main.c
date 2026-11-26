@@ -1,8 +1,9 @@
-/* Diskus P14 — Mode 13h graphics + user tasks + syscalls */
+/* Diskus P15 — UI kit on Mode 13h + user tasks + syscalls */
 #include "disk.h"
 #include "gfx.h"
 #include "paging.h"
 #include "ramfs.h"
+#include "ui.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -477,12 +478,25 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run\n");
+  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui\n");
   puts("  run [name]  — hello|bye|cat from ramfs (default: hello)\n");
+  puts("  ui [1|2]    — redraw UI kit; 1=Yes 2=No pressed\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P14 - Mode 13h graphics\n");
+  puts("Diskus kernel P15 - UI kit (panel/button)\n");
+}
+
+static void cmd_ui(const char *args) {
+  while (*args == ' ')
+    args++;
+  if (*args == '1')
+    ui_demo_press(0);
+  else if (*args == '2')
+    ui_demo_press(1);
+  else
+    ui_demo_press(-1);
+  puts("ui kit ok\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -613,6 +627,14 @@ static void run_line(char *line) {
   }
   if (streq(line, "sysdemo")) {
     cmd_sysdemo();
+    return;
+  }
+  if (streq(line, "ui")) {
+    cmd_ui("");
+    return;
+  }
+  if (starts_with(line, "ui ")) {
+    cmd_ui(line + 3);
     return;
   }
   if (streq(line, "run")) {
@@ -786,9 +808,9 @@ static void tasks_init(void) {
 
 void kmain(void) {
   gfx_clear(0);
-  gfx_demo();
+  ui_demo();
   puts("Diskus C\n");
-  puts("P14 gfx\n");
+  puts("P15 ui\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();

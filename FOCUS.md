@@ -1,21 +1,19 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P14 — Framebuffer** — VGA Mode 13h (320×200), пиксели + простой текст
+**P15 — UI kit** — панель / кнопка / подпись поверх Mode 13h
 
 ## Чеклист
-- [x] Mode 13h (boot BIOS до PM)
-- [x] putpixel / fill / rect на `0xA0000`
-- [x] Крошечный шрифт → puts на экране (+ serial)
-- [x] Boot-демо картинка; smoke по serial
-- [x] LEARN.md P14
-- [x] WSL → «ок» → push
+- [x] `ui_panel` / `ui_button` / `ui_label`
+- [x] Boot-демо «окошко» с кнопками
+- [x] Shell `ui` — перерисовать / нажать кнопку (клава, мышь = P16)
+- [x] LEARN.md P15
+- [x] WSL smoke → «ок» → push
 
 ## Закрыто
-- P0–P13, VM — ✅
+- P0–P15, VM — ✅
 
 ## Дальше (визуальный трек)
-- P15 — UI kit (кнопка/панель)
 - P16 — мышь + клик
 - потом desktop
 

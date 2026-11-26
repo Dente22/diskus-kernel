@@ -99,8 +99,12 @@ $gfxO = Join-Path $Out 'gfx.o'
 & $zig cc @cflags -c (Join-Path $Kernel 'gfx.c') -o $gfxO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$uiO = Join-Path $Out 'ui.o'
+& $zig cc @cflags -c (Join-Path $Kernel 'ui.c') -o $uiO
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $kernelElf = Join-Path $Out 'kernel.elf'
-$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO, $pagingO, $gfxO)
+$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO, $pagingO, $gfxO, $uiO)
 $lld = Join-Path (Split-Path $zig) 'lld.exe'
 if (-not (Test-Path $lld)) {
     $lld = Get-ChildItem (Split-Path $zig) -Filter 'lld.exe' -Recurse -ErrorAction SilentlyContinue |

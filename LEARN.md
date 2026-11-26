@@ -334,8 +334,26 @@ cat note
 
 ---
 
+## P15 — UI kit (панель / кнопка)
+
+**Идея:** поверх пикселей — **виджеты**, ещё без мыши.
+
+1. `ui_panel` / `ui_panel_title` — прямоугольник + рамка + title bar.
+2. `ui_button` — bevel, состояния normal / focus / pressed.
+3. `ui_label` — текст на FB.
+4. `ui_demo` при boot; shell: `ui`, `ui 1`, `ui 2` (клава имитирует клик → P16).
+
+**Код:** `kernel/ui.c`, `ui.h`.
+
+**Проверка:** в QEMU окошко с Yes/No; smoke — `P15` + `user done`.
+
+**Чему учит:** UI = композиция примитивов gfx; hit-test/мышь — следующий шаг.
+
+---
+
 ## Словарь
 
+- **UI kit** — набор виджетов (panel, button, label) на framebuffer.
 - **Framebuffer** — линейный буфер пикселей (Mode 13h: 320×200).
 - **fd** — номер открытого файла (handle) в таблице ядра.
 - **Paging / MMU** — перевод virt→phys по таблицам.
