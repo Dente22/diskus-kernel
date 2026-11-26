@@ -40,7 +40,7 @@ if ($Smoke) {
     if (Test-Path $log) { Remove-Item $log -Force }
     $args = "-drive format=raw,file=`"$Img`" -boot order=c -display none -serial file:$log -no-reboot"
     $p = Start-Process -FilePath $qemu -ArgumentList $args -PassThru -WindowStyle Hidden
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 4
     if (-not $p.HasExited) {
         try { Stop-Process -Id $p.Id -Force } catch {}
     }
@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P12' -and $text -match 'paging on' -and $text -match 'Diskus ramfs' -and $text -match 'loaded cat') {
+        if ($text -match 'P13' -and $text -match 'spawned' -and $text -match 'user done' -and $text -match 'Diskus ramfs') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P12 file syscalls on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P13 user task on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

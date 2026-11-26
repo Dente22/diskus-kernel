@@ -1,4 +1,4 @@
-/* Diskus P12 — file syscalls open/read/close + paging + disk */
+/* Diskus P13 — user process in scheduler + file syscalls + paging */
 #include "disk.h"
 #include "paging.h"
 #include "ramfs.h"
@@ -12,7 +12,8 @@ enum {
   VGA_COLS = 80,
   VGA_ROWS = 25,
   TIMER_HZ = 100,
-  NTASKS = 2,
+  NTASKS = 3,
+  TASK_USER = 2,
   SYS_WRITE = 1,
   SYS_UPTIME = 2,
   SYS_EXIT = 3,
@@ -42,6 +43,7 @@ extern void gdt_flush(void *gdt_ptr);
 extern void tss_flush(u16 selector);
 extern void enter_userland(u32 eip, u32 esp);
 extern void exit_userland(void);
+extern void exit_current_task(void);
 
 static void puts(const char *s);
 static void put_u32(u32 n);
@@ -92,13 +94,16 @@ static struct gdt_ptr gdtp;
 
 struct task {
   u32 esp;
+  u32 kstack_top; /* TSS.esp0 when this task is in ring3 */
   const char *name;
   u8 alive;
+  u8 user; /* 1 = ring3 process */
 };
 
 /* Task stacks in known RAM (not BSS of the kernel image — objcopy drops BSS). */
 #define STACK0_TOP ((u32 *)0x00070000)
 #define STACK1_TOP ((u32 *)0x00072000)
+#define STACK2_TOP ((u32 *)0x00074000) /* kernel stack for user task / TSS.esp0 */
 static struct task tasks[NTASKS];
 static u32 current;
 static u32 task_switches;
@@ -128,18 +133,43 @@ void kbd_irq_handler(void) {
   kbd_head = next;
 }
 
+static void tss_set_esp0(u32 esp0) { TSS_MEM->esp0 = esp0; }
+
+static void activate_task(u32 id) {
+  current = id;
+  if (tasks[id].user)
+    tss_set_esp0(tasks[id].kstack_top);
+  else
+    tss_set_esp0((u32)STACK2_TOP);
+}
+
 u32 schedule_switch(u32 old_esp) {
   tasks[current].esp = old_esp;
   u32 next = current;
   for (u32 i = 0; i < NTASKS; i++) {
     next = (next + 1) % NTASKS;
     if (tasks[next].alive) {
-      current = next;
+      activate_task(next);
       task_switches++;
       return tasks[current].esp;
     }
   }
   return old_esp;
+}
+
+/* SYS_EXIT: current already !alive — pick another task (noreturn via asm). */
+u32 schedule_after_exit(void) {
+  u32 next = current;
+  for (u32 i = 0; i < NTASKS; i++) {
+    next = (next + 1) % NTASKS;
+    if (tasks[next].alive) {
+      activate_task(next);
+      task_switches++;
+      return tasks[current].esp;
+    }
+  }
+  for (;;)
+    __asm__ volatile("hlt");
 }
 
 static void idt_set(u8 num, u32 base, u16 sel, u8 flags) {
@@ -187,8 +217,8 @@ static void gdt_tss_init(void) {
   struct tss_entry *tss = TSS_MEM;
   for (u32 i = 0; i < sizeof(*tss) / 4; i++)
     ((u32 *)tss)[i] = 0;
-  /* Separate from kmain stack at 0x90000 — else ring3 int overwrites saved ESP */
-  tss->esp0 = 0x8F000;
+  /* Kernel stack for ring3→ring0 (per-user kstack updated on schedule) */
+  tss->esp0 = (u32)STACK2_TOP;
   tss->ss0 = 0x10;
   tss->iomap = (u16)sizeof(*tss);
 
@@ -247,8 +277,10 @@ u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
   }
   if (num == SYS_UPTIME)
     return ticks;
-  if (num == SYS_EXIT)
-    exit_userland(); /* noreturn */
+  if (num == SYS_EXIT) {
+    tasks[current].alive = 0;
+    exit_current_task(); /* noreturn — schedule another task */
+  }
   if (num == SYS_OPEN) {
     char name[RAMFS_NAME];
     if (copy_uname((const char *)arg1, name, sizeof(name)) < 0)
@@ -290,8 +322,14 @@ u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
   return (u32)-1;
 }
 
-/* Load raw bytes from ramfs → 0x40000, then ring3. Returns 0 ok, <0 fail. */
+static void task_spawn_user(u32 id, const char *name, u32 entry, u32 uesp, u32 *kstack_top);
+
+/* Load from ramfs, spawn as schedulable ring3 task, wait until exit. */
 static int run_from_ramfs(const char *name) {
+  if (tasks[TASK_USER].alive) {
+    puts("user busy\n");
+    return -1;
+  }
   int n = ramfs_get(name, (void *)USER_ENTRY, RAMFS_DATA);
   if (n < 0) {
     puts("no such program: ");
@@ -303,13 +341,15 @@ static int run_from_ramfs(const char *name) {
     puts("empty program\n");
     return -1;
   }
-  puts("loaded ");
+  puts("spawned ");
   puts(name);
   puts(" ");
   put_u32((u32)n);
   puts(" bytes\n");
-  enter_userland(USER_ENTRY, USER_STACK);
-  puts("back from user\n");
+  task_spawn_user(TASK_USER, name, USER_ENTRY, USER_STACK, STACK2_TOP);
+  while (tasks[TASK_USER].alive)
+    __asm__ volatile("hlt");
+  puts("user done\n");
   return 0;
 }
 
@@ -462,7 +502,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P12 - file syscalls open/read/close\n");
+  puts("Diskus kernel P13 - user process in scheduler\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -702,7 +742,7 @@ static void task_exit(void) {
 
 static void task_spawn(u32 id, const char *name, void (*entry)(void), u32 *stack_top) {
   u32 *sp = stack_top;
-  /* IRQ/yield resume: popa then iret → EIP, CS, EFLAGS */
+  /* IRQ/yield resume: popa then iret → EIP, CS, EFLAGS (same privilege) */
   *--sp = 0x202;          /* EFLAGS (IF=1) */
   *--sp = 0x08;           /* kernel CS */
   *--sp = (u32)entry;     /* EIP */
@@ -715,9 +755,37 @@ static void task_spawn(u32 id, const char *name, void (*entry)(void), u32 *stack
   *--sp = 0;              /* ESI */
   *--sp = 0;              /* EDI <- ESP */
   tasks[id].esp = (u32)sp;
+  tasks[id].kstack_top = (u32)stack_top;
   tasks[id].name = name;
   tasks[id].alive = 1;
+  tasks[id].user = 0;
   (void)task_exit;
+  (void)enter_userland;
+  (void)exit_userland;
+}
+
+static void task_spawn_user(u32 id, const char *name, u32 entry, u32 uesp, u32 *kstack_top) {
+  u32 *sp = kstack_top;
+  /* popa + iret with privilege change → SS, ESP, EFLAGS, CS, EIP */
+  *--sp = 0x23;           /* SS user */
+  *--sp = uesp;           /* ESP user */
+  *--sp = 0x202;          /* EFLAGS IF=1 */
+  *--sp = 0x1B;           /* CS user */
+  *--sp = entry;          /* EIP */
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;
+  *--sp = 0;              /* EDI */
+  tasks[id].esp = (u32)sp;
+  tasks[id].kstack_top = (u32)kstack_top;
+  tasks[id].name = name;
+  tasks[id].alive = 1;
+  tasks[id].user = 1;
+  tss_set_esp0((u32)kstack_top);
 }
 
 static void tasks_init(void) {
@@ -726,7 +794,12 @@ static void tasks_init(void) {
   preempt_enabled = 0;
   tasks[0].name = "shell";
   tasks[0].alive = 1;
-  tasks[0].esp = 0; /* filled on first IRQ/yield */
+  tasks[0].user = 0;
+  tasks[0].esp = 0;
+  tasks[0].kstack_top = (u32)STACK0_TOP;
+  tasks[TASK_USER].alive = 0;
+  tasks[TASK_USER].user = 1;
+  tasks[TASK_USER].kstack_top = (u32)STACK2_TOP;
   (void)STACK0_TOP;
   task_spawn(1, "blink", task_blink, STACK1_TOP);
 }
@@ -734,10 +807,11 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P12 filesys\n");
+  puts("P13 user task\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();
+  TSS_MEM->esp0 = (u32)STACK2_TOP;
   fds_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);

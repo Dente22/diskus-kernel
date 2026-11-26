@@ -302,6 +302,21 @@ cat note
 
 ---
 
+## P13 — User process в планировщике
+
+**Идея:** `run` больше не делает блокирующий `enter_userland`. User — обычная задача: кадр для `iret` в ring3, таймер может её вытеснить.
+
+1. **`task_spawn_user`** — на kstack кладёт SS/ESP/EFLAGS/CS/EIP (DPL3) + `pusha`.
+2. **IRQ0** планирует и из ring3 (контекст на `TSS.esp0` = kstack задачи).
+3. **`SYS_EXIT`** → `alive=0` → `exit_current_task` → `schedule_after_exit` (без возврата в shell через `exit_userland`).
+4. Shell ждёт: `while (tasks[user].alive) hlt`.
+
+**Проверка:** `spawned hello` … `user done`; то же для `bye`/`cat`; `tasks` видит user пока жив.
+
+**Чему учит:** процесс vs «вызвали функцию ядра», зачем отдельный kstack/TSS.esp0.
+
+---
+
 ## Словарь
 
 - **fd** — номер открытого файла (handle) в таблице ядра.

@@ -7,9 +7,11 @@ GLOBAL load_idt
 GLOBAL irq_sti
 GLOBAL irq_cli
 GLOBAL yield
+GLOBAL exit_current_task
 EXTERN timer_handler
 EXTERN kbd_irq_handler
 EXTERN schedule_switch
+EXTERN schedule_after_exit
 EXTERN syscall_dispatch
 EXTERN preempt_enabled
 
@@ -27,11 +29,7 @@ irq0_stub:
 
     cmp dword [preempt_enabled], 0
     je .nosched
-    ; CS of interrupted code at [esp+36]
-    mov eax, [esp + 36]
-    test eax, 3                 ; RPL != 0 → ring3, don't steal user context
-    jnz .nosched
-
+    ; Schedule from ring0 and ring3 (ring3 frame lives on TSS.esp0 stack)
     push esp
     call schedule_switch
     add esp, 4
@@ -88,6 +86,16 @@ yield:
     push esp
     call schedule_switch
     add esp, 4
+    mov esp, eax
+    popa
+    iret
+
+; noreturn — SYS_EXIT already marked task dead
+exit_current_task:
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    call schedule_after_exit
     mov esp, eax
     popa
     iret
