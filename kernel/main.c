@@ -1,5 +1,6 @@
-/* Diskus P13 — user process in scheduler + file syscalls + paging */
+/* Diskus P14 — Mode 13h graphics + user tasks + syscalls */
 #include "disk.h"
+#include "gfx.h"
 #include "paging.h"
 #include "ramfs.h"
 
@@ -9,8 +10,6 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 
 enum {
-  VGA_COLS = 80,
-  VGA_ROWS = 25,
   TIMER_HZ = 100,
   NTASKS = 3,
   TASK_USER = 2,
@@ -25,8 +24,6 @@ enum {
   FD_MAX = 4,
 };
 
-static volatile u16 *const VGA = (volatile u16 *)0xB8000;
-static u32 cursor;
 static u8 shift_on;
 static volatile u32 ticks;
 /* Set after tasks_init; IRQ0 skips schedule when 0. Asm reads this symbol. */
@@ -379,33 +376,16 @@ static int serial_getc(void) {
 }
 
 static void vga_clear(void) {
-  for (u32 i = 0; i < VGA_COLS * VGA_ROWS; i++)
-    VGA[i] = (u16)' ' | (u16)(0x0F << 8);
-  cursor = 0;
+  gfx_clear_text();
 }
 
 static void vga_putc(char c) {
-  if (c == '\n') {
-    cursor = (cursor / VGA_COLS + 1) * VGA_COLS;
-    if (cursor >= VGA_COLS * VGA_ROWS)
-      cursor = 0;
-    serial_putc('\n');
-    return;
-  }
+  serial_putc(c);
+  gfx_putc(c, 10); /* light green on black */
   if (c == '\b') {
-    if (cursor % VGA_COLS) {
-      cursor--;
-      VGA[cursor] = (u16)' ' | (u16)(0x0A << 8);
-    }
-    serial_putc('\b');
     serial_putc(' ');
     serial_putc('\b');
-    return;
   }
-  VGA[cursor++] = (u16)c | (u16)(0x0A << 8);
-  if (cursor >= VGA_COLS * VGA_ROWS)
-    cursor = 0;
-  serial_putc(c);
 }
 
 static void puts(const char *s) {
@@ -502,7 +482,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P13 - user process in scheduler\n");
+  puts("Diskus kernel P14 - Mode 13h graphics\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -725,12 +705,12 @@ static void shell(void) {
 }
 
 static void task_blink(void) {
-  static const char spin[] = "|/-\\";
   u32 i = 0;
   for (;;) {
-    VGA[VGA_COLS - 1] = (u16)spin[i % 4] | (u16)(0x0E << 8);
+    /* spinning pixel in top-right (graphics) */
+    u8 c = (u8)(14 + (i % 3));
+    gfx_fill_rect(GFX_W - 10, 2, 8, 8, c);
     i++;
-    /* no yield — preemptive IRQ0 switches away */
   }
 }
 
@@ -805,9 +785,10 @@ static void tasks_init(void) {
 }
 
 void kmain(void) {
-  vga_clear();
+  gfx_clear(0);
+  gfx_demo();
   puts("Diskus C\n");
-  puts("P13 user task\n");
+  puts("P14 gfx\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();

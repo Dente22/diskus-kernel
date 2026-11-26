@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P13' -and $text -match 'spawned' -and $text -match 'user done' -and $text -match 'Diskus ramfs') {
+        if ($text -match 'P14' -and $text -match 'paging on' -and $text -match 'spawned' -and $text -match 'user done') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P13 user task on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P14 gfx on serial. Got: $text"
 }
 
 & $qemu -drive "format=raw,file=$Img" -boot order=c

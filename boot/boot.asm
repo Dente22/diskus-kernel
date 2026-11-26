@@ -31,6 +31,10 @@ start:
     int 0x13
     jc disk_fail
 
+    ; VGA Mode 13h (320x200x256) while BIOS still works
+    mov ax, 0x0013
+    int 0x10
+
     ; Fast A20
     in al, 0x92
     or al, 2

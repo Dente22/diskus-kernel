@@ -317,8 +317,26 @@ cat note
 
 ---
 
+## P14 — Framebuffer (VGA Mode 13h)
+
+**Идея:** первый «визуал» — не текст 80×25, а **пиксели**.
+
+1. Boot (ещё real mode): `ax=0x0013`, `int 0x10` → 320×200×256, FB = `0xA0000`.
+2. `gfx_putpixel` / `fill_rect` / `rect`.
+3. Шрифт 8×8 → `gfx_putc` / shell и puts рисуют на экране (+ serial).
+4. `gfx_demo` — панель и цветные квадраты при старте.
+
+**Код:** `boot/boot.asm`, `kernel/gfx.c`, `font8.h`.
+
+**Проверка:** в QEMU видно картинку + текст; smoke по serial — `P14` + `paging on` + `user done`.
+
+**Чему учит:** framebuffer, почему mode set до PM проще, путь к UI.
+
+---
+
 ## Словарь
 
+- **Framebuffer** — линейный буфер пикселей (Mode 13h: 320×200).
 - **fd** — номер открытого файла (handle) в таблице ядра.
 - **Paging / MMU** — перевод virt→phys по таблицам.
 - **Identity map** — virt == phys (учебный первый шаг).

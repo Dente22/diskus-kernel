@@ -1,22 +1,26 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**—** фаза не выбрана (P13 закрыт)
+**P14 — Framebuffer** — VGA Mode 13h (320×200), пиксели + простой текст
 
 ## Чеклист
-- (пусто)
+- [x] Mode 13h (boot BIOS до PM)
+- [x] putpixel / fill / rect на `0xA0000`
+- [x] Крошечный шрифт → puts на экране (+ serial)
+- [x] Boot-демо картинка; smoke по serial
+- [x] LEARN.md P14
+- [x] WSL → «ок» → push
 
 ## Закрыто
-- P0–P13 — ✅ … → paging → file syscalls → **user process in scheduler**
-- VM — ✅ WSL2 `DiskusUbuntu`
+- P0–P13, VM — ✅
 
-## Кандидаты
-- page fault handler / раздельные user pages
-- больше процессов / pipe / ELF
-- или скажи свою идею
+## Дальше (визуальный трек)
+- P15 — UI kit (кнопка/панель)
+- P16 — мышь + клик
+- потом desktop
 
 ## Парковка
-- UEFI / Limine / Desktop / Rust / full disk FS
+- VBE/HD, UEFI, окна, обои
 
 ## Правило
-`LEARN.md` + commit/push после пачки. Эксперименты — WSL (`VM.md`).
+`LEARN.md` + push после пачки. Эксперименты — WSL.
