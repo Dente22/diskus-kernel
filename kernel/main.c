@@ -1,4 +1,4 @@
-/* Diskus P11 — paging (identity map) + disk user programs */
+/* Diskus P12 — file syscalls open/read/close + paging + disk */
 #include "disk.h"
 #include "paging.h"
 #include "ramfs.h"
@@ -16,8 +16,12 @@ enum {
   SYS_WRITE = 1,
   SYS_UPTIME = 2,
   SYS_EXIT = 3,
+  SYS_OPEN = 4,
+  SYS_READ = 5,
+  SYS_CLOSE = 6,
   USER_ENTRY = 0x40000,
   USER_STACK = 0x50000,
+  FD_MAX = 4,
 };
 
 static volatile u16 *const VGA = (volatile u16 *)0xB8000;
@@ -74,6 +78,15 @@ struct tss_entry {
 #define IDT_MEM ((struct idt_entry *)0x00061000)
 #define GDT_MEM ((u64 *)0x00062000)
 #define TSS_MEM ((struct tss_entry *)0x00062100)
+
+struct fdent {
+  u8 used;
+  u32 pos;
+  u32 len;
+  u8 data[RAMFS_DATA];
+};
+#define FD_MEM ((struct fdent *)0x00067000)
+
 static struct idt_ptr idtp;
 static struct gdt_ptr gdtp;
 
@@ -194,9 +207,37 @@ static void gdt_tss_init(void) {
 
 /* interrupts_init inlined in kmain for P8 bring-up markers */
 
+static int fd_alloc(void) {
+  struct fdent *fds = FD_MEM;
+  for (u32 i = 0; i < FD_MAX; i++) {
+    if (!fds[i].used)
+      return (int)i;
+  }
+  return -1;
+}
+
+static void fds_init(void) {
+  struct fdent *fds = FD_MEM;
+  for (u32 i = 0; i < FD_MAX; i++)
+    fds[i].used = 0;
+}
+
+/* Copy C string from user pointer (identity map). */
+static int copy_uname(const char *upath, char *out, u32 cap) {
+  if (!upath || cap == 0)
+    return -1;
+  for (u32 i = 0; i + 1 < cap; i++) {
+    char c = upath[i];
+    out[i] = c;
+    if (!c)
+      return 0;
+  }
+  out[cap - 1] = 0;
+  return 0;
+}
+
 /* Called from asm int 0x80: num=eax, arg1=ebx, arg2=ecx, arg3=edx */
 u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
-  (void)arg3;
   if (num == SYS_WRITE) {
     const char *p = (const char *)arg1;
     u32 len = arg2;
@@ -208,6 +249,44 @@ u32 syscall_dispatch(u32 num, u32 arg1, u32 arg2, u32 arg3) {
     return ticks;
   if (num == SYS_EXIT)
     exit_userland(); /* noreturn */
+  if (num == SYS_OPEN) {
+    char name[RAMFS_NAME];
+    if (copy_uname((const char *)arg1, name, sizeof(name)) < 0)
+      return (u32)-1;
+    int fd = fd_alloc();
+    if (fd < 0)
+      return (u32)-1;
+    struct fdent *f = &FD_MEM[fd];
+    int n = ramfs_get(name, f->data, RAMFS_DATA);
+    if (n < 0)
+      return (u32)-1;
+    f->used = 1;
+    f->pos = 0;
+    f->len = (u32)n;
+    return (u32)fd;
+  }
+  if (num == SYS_READ) {
+    u32 fd = arg1;
+    u8 *dst = (u8 *)arg2;
+    u32 want = arg3;
+    if (fd >= FD_MAX || !FD_MEM[fd].used || !dst)
+      return (u32)-1;
+    struct fdent *f = &FD_MEM[fd];
+    u32 left = f->len - f->pos;
+    if (want > left)
+      want = left;
+    for (u32 i = 0; i < want; i++)
+      dst[i] = f->data[f->pos + i];
+    f->pos += want;
+    return want;
+  }
+  if (num == SYS_CLOSE) {
+    u32 fd = arg1;
+    if (fd >= FD_MAX || !FD_MEM[fd].used)
+      return (u32)-1;
+    FD_MEM[fd].used = 0;
+    return 0;
+  }
   return (u32)-1;
 }
 
@@ -379,11 +458,11 @@ static int starts_with(const char *s, const char *p) {
 
 static void cmd_help(void) {
   puts("commands: help clear about echo uptime tasks ls cat write sysdemo run\n");
-  puts("  run [name]  — hello|bye from ramfs (default: hello)\n");
+  puts("  run [name]  — hello|bye|cat from ramfs (default: hello)\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P11 - paging + disk user progs\n");
+  puts("Diskus kernel P12 - file syscalls open/read/close\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -655,10 +734,11 @@ static void tasks_init(void) {
 void kmain(void) {
   vga_clear();
   puts("Diskus C\n");
-  puts("P11 paging\n");
+  puts("P12 filesys\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();
+  fds_init();
   for (u32 i = 0; i < 256; i++)
     idt_set((u8)i, 0, 0x08, 0);
   idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
@@ -699,6 +779,7 @@ void kmain(void) {
   puts("user from disk...\n");
   run_from_ramfs("hello");
   run_from_ramfs("bye");
+  run_from_ramfs("cat");
 
   shell();
 }

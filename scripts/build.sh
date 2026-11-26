@@ -32,6 +32,7 @@ build_user() {
 
 USER_LEN="$(build_user user.asm user.bin)"
 USER2_LEN="$(build_user user2.asm user2.bin)"
+USER3_LEN="$(build_user user_cat.asm user_cat.bin)"
 
 nasm -f elf32 "$KERNEL/entry.asm" -o "$OUT/entry.o"
 nasm -f elf32 "$KERNEL/idt.asm" -o "$OUT/idt.o"
@@ -68,19 +69,19 @@ import struct, pathlib, sys
 out = pathlib.Path(sys.argv[1])
 hello = (out / "user.bin").read_bytes()
 bye = (out / "user2.bin").read_bytes()
+catp = (out / "user_cat.bin").read_bytes()
 
 def put(name: str, data: bytes) -> bytes:
     nb = name.encode("ascii")[:15].ljust(16, b"\0")
     return nb + struct.pack("<I", len(data)) + data
 
-blob = b"DKFS" + bytes([2, 0, 0, 0]) + put("hello", hello) + put("bye", bye)
-blob = blob.ljust((len(blob) + 511) // 512 * 512, b"\0")
-if len(blob) < 1024:
-    blob = blob.ljust(1024, b"\0")
+blob = b"DKFS" + bytes([3, 0, 0, 0]) + put("hello", hello) + put("bye", bye) + put("cat", catp)
+need = max(1024, (len(blob) + 511) // 512 * 512)
+blob = blob.ljust(need, b"\0")
 (out / "dkfs.bin").write_bytes(blob)
-print(len(hello), len(bye), len(blob))
+print(len(hello), len(bye), len(catp), len(blob))
 PY
 
 cat "$OUT/boot.bin" "$OUT/kernel.pad" "$OUT/dkfs.bin" > "$OUT/diskus.img"
 IMG_SIZE=$(wc -c < "$OUT/diskus.img" | tr -d ' ')
-echo "OK $OUT/diskus.img ($IMG_SIZE bytes; kernel $KSIZE raw; DKFS user $USER_LEN+$USER2_LEN)"
+echo "OK $OUT/diskus.img ($IMG_SIZE bytes; kernel $KSIZE raw; DKFS user $USER_LEN+$USER2_LEN+$USER3_LEN)"

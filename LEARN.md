@@ -279,8 +279,32 @@ cat note
 
 ---
 
+## P12 — File syscalls (`open` / `read` / `close`)
+
+**Идея:** user не лезет в ramfs напрямую — просит ядро через `int 0x80`.
+
+| № | Имя | Args | Результат |
+|---|-----|------|-----------|
+| 4 | `SYS_OPEN` | `ebx`=имя | fd или -1 |
+| 5 | `SYS_READ` | `ebx`=fd, `ecx`=buf, `edx`=len | байт прочитано |
+| 6 | `SYS_CLOSE` | `ebx`=fd | 0 / -1 |
+
+(старые 1/2/3 — write/uptime/exit без изменений)
+
+**Поток `cat`:** open(`readme`) → read → SYS_WRITE на консоль → close → exit.  
+Программа: `kernel/user_cat.asm`, в DKFS как файл `cat`.
+
+**Код:** fd-таблица `FD_MEM` (`0x67000`) в `main.c`.
+
+**Проверка:** `run cat` печатает текст readme; smoke — `loaded cat` + `Diskus ramfs`.
+
+**Чему учит:** fd как handle, копирование user↔kernel буферов, зачем не давать user писать в FS напрямую.
+
+---
+
 ## Словарь
 
+- **fd** — номер открытого файла (handle) в таблице ядра.
 - **Paging / MMU** — перевод virt→phys по таблицам.
 - **Identity map** — virt == phys (учебный первый шаг).
 - **CR3** — физический адрес page directory.

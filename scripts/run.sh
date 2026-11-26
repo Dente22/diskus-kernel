@@ -23,12 +23,12 @@ if [[ "${1:-}" == "--smoke" ]]; then
   sleep 0.3
   TEXT="$(cat "$LOG" 2>/dev/null || true)"
   printf '%s\n' "$TEXT"
-  if echo "$TEXT" | grep -q 'P11' && echo "$TEXT" | grep -q 'paging on' \
-    && echo "$TEXT" | grep -q 'diskfs loaded' && echo "$TEXT" | grep -q 'hello from ring3'; then
+  if echo "$TEXT" | grep -q 'P12' && echo "$TEXT" | grep -q 'paging on' \
+    && echo "$TEXT" | grep -q 'Diskus ramfs' && echo "$TEXT" | grep -q 'loaded cat'; then
     echo 'SMOKE OK'
     exit 0
   fi
-  echo "SMOKE FAIL - no P11 paging on serial. Got: $TEXT" >&2
+  echo "SMOKE FAIL - no P12 file syscalls on serial. Got: $TEXT" >&2
   exit 1
 fi
 

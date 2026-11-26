@@ -60,8 +60,10 @@ function Build-UserBin([string]$AsmName, [string]$BinName) {
 # User programs live on the disk image (DKFS), not embedded in the kernel
 $userBytes = Build-UserBin 'user.asm' 'user.bin'
 $user2Bytes = Build-UserBin 'user2.asm' 'user2.bin'
+$user3Bytes = Build-UserBin 'user_cat.asm' 'user_cat.bin'
 $userLen = $userBytes.Length
 $user2Len = $user2Bytes.Length
+$user3Len = $user3Bytes.Length
 
 $entryO = Join-Path $Out 'entry.o'
 & $nasm -f elf32 (Join-Path $Kernel 'entry.asm') -o $entryO
@@ -138,10 +140,11 @@ function Append-DkfsFile([System.Collections.Generic.List[byte]]$dst, [string]$n
 
 $dkfs = New-Object 'System.Collections.Generic.List[byte]'
 $dkfs.AddRange([byte[]][char[]]@('D','K','F','S'))
-$dkfs.Add(2)   # file count
+$dkfs.Add(3)   # file count
 $dkfs.Add(0); $dkfs.Add(0); $dkfs.Add(0)
 Append-DkfsFile $dkfs 'hello' $userBytes
 Append-DkfsFile $dkfs 'bye' $user2Bytes
+Append-DkfsFile $dkfs 'cat' $user3Bytes
 # pad to 2 sectors (kernel reads DKFS_SECS=2)
 while ($dkfs.Count % 512 -ne 0) { $dkfs.Add(0) }
 while ($dkfs.Count -lt 1024) { $dkfs.Add(0) }
@@ -155,4 +158,4 @@ $outBytes = New-Object byte[] $total
 [Array]::Copy($dkfs.ToArray(), 0, $outBytes, $boot.Length + $padded.Length, $dkfs.Count)
 [System.IO.File]::WriteAllBytes($img, $outBytes)
 
-Write-Host "OK $img ($($outBytes.Length) bytes; kernel $($kb.Length) raw; DKFS user $userLen+$user2Len)"
+Write-Host "OK $img ($($outBytes.Length) bytes; kernel $($kb.Length) raw; DKFS user $userLen+$user2Len+$user3Len)"

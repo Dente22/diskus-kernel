@@ -2,7 +2,7 @@
 
 typedef unsigned int u32;
 
-enum { RAMFS_NAME = 16, RAMFS_DATA = 128, RAMFS_MAX = 8 };
+enum { RAMFS_NAME = 16, RAMFS_DATA = 256, RAMFS_MAX = 8 };
 
 void ramfs_init(void);
 int ramfs_write(const char *name, const char *data);
