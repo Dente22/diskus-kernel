@@ -351,8 +351,27 @@ cat note
 
 ---
 
+## P16 — Мышь + клик
+
+**Идея:** курсор и hit-test кнопок — без «магии», через PS/2.
+
+1. **8042** → aux device, IRQ12; пакеты 3 байта (кнопки + dx/dy).
+2. Курсор: save-under + стрелка на FB.
+3. **Левый клик** → `ui_demo_click(x,y)` → Yes/No pressed.
+4. Shell крутит `mouse_poll` (hlt будит IRQ мыши).
+
+**Код:** `kernel/mouse.c`, `irq12_stub` в `idt.asm`.
+
+**Проверка:** smoke — `P16` + `mouse on`. Под WSL окно QEMU часто не отдаёт PS/2 ввод — печатай в **терминале** (`-serial stdio`): `m l/r/u/d`, `m click`, или `ui 1`/`ui 2`.
+
+**Чему учит:** IRQ slave + EOI, dx/dy, hit-test; хост-ввод ≠ драйвер (WSL/GTK tablet).
+
+---
+
 ## Словарь
 
+- **PS/2 mouse** — классическая мышь через контроллер 8042, IRQ12.
+- **Hit-test** — попадание (x,y) в прямоугольник кнопки.
 - **UI kit** — набор виджетов (panel, button, label) на framebuffer.
 - **Framebuffer** — линейный буфер пикселей (Mode 13h: 320×200).
 - **fd** — номер открытого файла (handle) в таблице ядра.

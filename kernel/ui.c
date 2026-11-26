@@ -13,7 +13,7 @@ static u32 strlen_u(const char *s) {
 
 void ui_label(int x, int y, const char *s, u8 fg) {
   gfx_set_cursor((u32)(x / 8), (u32)(y / 8));
-  gfx_puts(s, fg);
+  gfx_puts_bg(s, fg, 0);
 }
 
 void ui_panel(int x, int y, int w, int h, u8 fill, u8 border) {
@@ -28,7 +28,7 @@ void ui_panel_title(int x, int y, int w, int h, const char *title, u8 fill, u8 b
   gfx_rect(x, y, w, h, border);
   if (title && title[0]) {
     gfx_set_cursor((u32)((x + 4) / 8), (u32)((y + 2) / 8));
-    gfx_puts(title, title_fg);
+    gfx_puts_bg(title, title_fg, title_bg);
   }
 }
 
@@ -63,26 +63,33 @@ void ui_button(int x, int y, int w, int h, const char *label, int state) {
     if (ty < y + 2)
       ty = y + 2;
     gfx_set_cursor((u32)(tx / 8), (u32)(ty / 8));
-    gfx_puts(label, text);
+    gfx_puts_bg(label, text, fill);
   }
 }
 
 void ui_demo(void) {
+  u32 save_c, save_r;
+  gfx_get_cursor(&save_c, &save_r);
+
   for (int y = 0; y < 20; y++)
     for (int x = 0; x < GFX_W; x++)
       gfx_putpixel(x, y, (u8)(1 + (y / 4)));
 
-  ui_panel_title(4, 22, 200, 50, "P15 UI kit", 1, 15, 9, 15);
+  ui_panel_title(4, 22, 200, 50, "P16 mouse", 1, 15, 9, 15);
   ui_button(12, 38, 56, 16, "Yes", btn_yes_state);
   ui_button(76, 38, 56, 16, "No", btn_no_state);
 
   ui_panel(210, 22, 106, 50, 0, 7);
   gfx_set_cursor(27, 3);
-  gfx_puts("1=Yes 2=No", 14);
+  gfx_puts_bg("click btn", 14, 0);
   gfx_set_cursor(27, 4);
-  gfx_puts("ui=redraw", 7);
+  gfx_puts_bg("or ui 1/2", 7, 0);
 
-  gfx_set_cursor(0, GFX_TEXT_ROW0);
+  /* keep shell cursor — don't jump back to TEXT_ROW0 (that stacked text) */
+  if (save_r < (u32)GFX_TEXT_ROW0)
+    gfx_set_cursor(0, GFX_TEXT_ROW0);
+  else
+    gfx_set_cursor(save_c, save_r);
 }
 
 void ui_demo_press(int which) {
@@ -97,4 +104,16 @@ void ui_demo_press(int which) {
     btn_no_state = UI_BTN_NORMAL;
   }
   ui_demo();
+}
+
+int ui_demo_click(int x, int y) {
+  if (x >= 12 && x < 68 && y >= 38 && y < 54) {
+    ui_demo_press(0);
+    return 0;
+  }
+  if (x >= 76 && x < 132 && y >= 38 && y < 54) {
+    ui_demo_press(1);
+    return 1;
+  }
+  return -1;
 }

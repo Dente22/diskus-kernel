@@ -1,5 +1,5 @@
 #pragma once
-/* Minimal 8x8 font for ASCII 32..127 (96 glyphs). Each glyph = 8 rows, MSB=left. */
+/* Minimal 8x8 font for ASCII 32..127 (96 glyphs). Each glyph = 8 rows, LSB=left. */
 static const unsigned char font8[96][8] = {
   {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /* space */
   {0x18,0x3C,0x3C,0x18,0x18,0x00,0x18,0x00}, /* ! */

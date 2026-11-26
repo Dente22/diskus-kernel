@@ -1,24 +1,23 @@
 # FOCUS — Diskus Kernel (hobby OS)
 
 ## Сейчас
-**P15 — UI kit** — панель / кнопка / подпись поверх Mode 13h
+**P16 — мышь + клик** — закрыт
 
 ## Чеклист
-- [x] `ui_panel` / `ui_button` / `ui_label`
-- [x] Boot-демо «окошко» с кнопками
-- [x] Shell `ui` — перерисовать / нажать кнопку (клава, мышь = P16)
-- [x] LEARN.md P15
+- [x] PS/2 mouse init + IRQ12 packets
+- [x] Курсор на framebuffer (save-under)
+- [x] Клик по Yes/No → pressed
+- [x] LEARN.md P16
 - [x] WSL smoke → «ок» → push
 
 ## Закрыто
-- P0–P15, VM — ✅
+- P0–P16, VM — ✅
 
 ## Дальше (визуальный трек)
-- P16 — мышь + клик
-- потом desktop
+- desktop / окна
 
 ## Парковка
-- VBE/HD, UEFI, окна, обои
+- VBE/HD, UEFI, обои
 
 ## Правило
 `LEARN.md` + push после пачки. Эксперименты — WSL.

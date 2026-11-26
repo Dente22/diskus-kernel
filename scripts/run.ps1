@@ -50,11 +50,11 @@ if ($Smoke) {
         $text = [IO.File]::ReadAllText($log)
     }
     Write-Host $text
-        if ($text -match 'P15' -and $text -match 'paging on' -and $text -match 'spawned' -and $text -match 'user done') {
+        if ($text -match 'P16' -and $text -match 'paging on' -and $text -match 'spawned' -and $text -match 'user done') {
         Write-Host 'SMOKE OK'
         exit 0
     }
-    Write-Error "SMOKE FAIL - no P15 ui on serial. Got: $text"
+    Write-Error "SMOKE FAIL - no P16 mouse on serial. Got: $text"
 }
 
-& $qemu -drive "format=raw,file=$Img" -boot order=c
+& $qemu -drive "format=raw,file=$Img" -boot order=c -vga std -serial stdio

@@ -15,3 +15,4 @@ void ui_panel_title(int x, int y, int w, int h, const char *title, u8 fill, u8 b
 void ui_button(int x, int y, int w, int h, const char *label, int state);
 void ui_demo(void);
 void ui_demo_press(int which); /* 0=yes, 1=no — toggle pressed look */
+int ui_demo_click(int x, int y); /* hit-test; -1 if miss */

@@ -1,6 +1,7 @@
-/* Diskus P15 — UI kit on Mode 13h + user tasks + syscalls */
+/* Diskus P16 — mouse + UI kit on Mode 13h */
 #include "disk.h"
 #include "gfx.h"
+#include "mouse.h"
 #include "paging.h"
 #include "ramfs.h"
 #include "ui.h"
@@ -32,6 +33,7 @@ volatile u32 preempt_enabled;
 
 extern void irq0_stub(void);
 extern void irq1_stub(void);
+extern void irq12_stub(void);
 extern void syscall_stub(void);
 extern void load_idt(void *idtp);
 extern void irq_sti(void);
@@ -122,13 +124,40 @@ static inline void outb(u16 port, u8 v) {
 
 void timer_handler(void) { ticks++; }
 
-void kbd_irq_handler(void) {
-  u8 sc = inb(0x60);
+void kbd_push_scancode(u8 sc) {
   u8 next = (u8)((kbd_head + 1) % KBD_CAP);
   if (next == kbd_tail)
-    return; /* drop */
+    return;
   kbd_q[kbd_head] = sc;
   kbd_head = next;
+}
+
+void kbd_irq_handler(void) {
+  /* Always drain OBF; AUX bit chooses mouse vs keyboard. */
+  for (u32 n = 0; n < 16; n++) {
+    u8 st = inb(0x64);
+    if (!(st & 0x01))
+      break;
+    u8 b = inb(0x60);
+    if (st & 0x20)
+      mouse_on_byte(b);
+    else
+      kbd_push_scancode(b);
+  }
+}
+
+/* Poll 8042 in case IRQs are missed (common while debugging). */
+static void kbd_poll(void) {
+  for (u32 n = 0; n < 16; n++) {
+    u8 st = inb(0x64);
+    if (!(st & 0x01))
+      break;
+    u8 b = inb(0x60);
+    if (st & 0x20)
+      mouse_on_byte(b);
+    else
+      kbd_push_scancode(b);
+  }
 }
 
 static void tss_set_esp0(u32 esp0) { TSS_MEM->esp0 = esp0; }
@@ -188,8 +217,8 @@ static void pic_remap(void) {
   outb(0xA1, 0x02);
   outb(0x21, 0x01);
   outb(0xA1, 0x01);
-  outb(0x21, 0xFC); /* IRQ0 + IRQ1 */
-  outb(0xA1, 0xFF);
+  outb(0x21, 0xFC); /* IRQ0 + IRQ1 (+ IRQ2 cascade already clear) */
+  outb(0xA1, 0xEF); /* IRQ12 mouse */
 }
 
 static void pit_init(u32 hz) {
@@ -446,19 +475,24 @@ static int scancode_to_ascii(u8 sc) {
   return ch ? (int)ch : -1;
 }
 
-static int kbd_getc(void) {
+static int kbd_pop_scancode(void) {
   if (kbd_tail == kbd_head)
     return -1;
   u8 sc = kbd_q[kbd_tail];
   kbd_tail = (u8)((kbd_tail + 1) % KBD_CAP);
-  return scancode_to_ascii(sc);
+  return (int)sc;
 }
 
 static int getc(void) {
-  int c = kbd_getc();
+  /* Prefer serial (stdio) — reliable under WSL QEMU */
+  int c = serial_getc();
   if (c >= 0)
     return c;
-  return serial_getc();
+  int sc = kbd_pop_scancode();
+  if (sc < 0)
+    return -1;
+  /* Arrows / space-click when line empty handled in shell */
+  return scancode_to_ascii((u8)sc);
 }
 
 static int streq(const char *a, const char *b) {
@@ -478,13 +512,14 @@ static int starts_with(const char *s, const char *p) {
 }
 
 static void cmd_help(void) {
-  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui\n");
+  puts("commands: help clear about echo uptime tasks ls cat write sysdemo run ui m\n");
   puts("  run [name]  — hello|bye|cat from ramfs (default: hello)\n");
   puts("  ui [1|2]    — redraw UI kit; 1=Yes 2=No pressed\n");
+  puts("  m <l|r|u|d|click> — move cursor / click (serial-friendly)\n");
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P15 - UI kit (panel/button)\n");
+  puts("Diskus kernel P16 - mouse click UI\n");
 }
 
 static void cmd_ui(const char *args) {
@@ -496,7 +531,32 @@ static void cmd_ui(const char *args) {
     ui_demo_press(1);
   else
     ui_demo_press(-1);
+  mouse_cursor_redraw();
   puts("ui kit ok\n");
+}
+
+static void cmd_m(const char *args) {
+  while (*args == ' ')
+    args++;
+  if (!*args || streq(args, "?")) {
+    puts("usage: m l|r|u|d|click\n");
+    return;
+  }
+  if (args[0] == 'l')
+    mouse_nudge(-12, 0);
+  else if (args[0] == 'r')
+    mouse_nudge(12, 0);
+  else if (args[0] == 'u')
+    mouse_nudge(0, -12);
+  else if (args[0] == 'd')
+    mouse_nudge(0, 12);
+  else if (starts_with(args, "click") || args[0] == 'c')
+    mouse_click_at_cursor();
+  else {
+    puts("usage: m l|r|u|d|click\n");
+    return;
+  }
+  puts("m ok\n");
 }
 
 static void cmd_sysdemo(void) {
@@ -637,6 +697,14 @@ static void run_line(char *line) {
     cmd_ui(line + 3);
     return;
   }
+  if (streq(line, "m")) {
+    cmd_m("");
+    return;
+  }
+  if (starts_with(line, "m ")) {
+    cmd_m(line + 2);
+    return;
+  }
   if (streq(line, "run")) {
     run_from_ramfs("hello");
     return;
@@ -691,17 +759,75 @@ static void shell(void) {
   u32 len = 0;
 
   puts("Diskus shell - type help\n");
+  puts("input: type in THIS terminal; m l/r/u/d/click or ui 1/2\n");
   puts("> ");
 
   for (;;) {
-    int c = getc();
+    kbd_poll();
+    mouse_poll();
+
+    /* Raw PS/2 scancodes: arrows nudge cursor (WSL host mouse often broken) */
+    int sc = kbd_pop_scancode();
+    if (sc >= 0) {
+      if (!(sc & 0x80)) {
+        if (sc == 0x4B) { /* left */
+          mouse_nudge(-6, 0);
+          continue;
+        }
+        if (sc == 0x4D) { /* right */
+          mouse_nudge(6, 0);
+          continue;
+        }
+        if (sc == 0x48) { /* up */
+          mouse_nudge(0, -6);
+          continue;
+        }
+        if (sc == 0x50) { /* down */
+          mouse_nudge(0, 6);
+          continue;
+        }
+        if (sc == 0x39 && len == 0) { /* space = click */
+          mouse_click_at_cursor();
+          continue;
+        }
+      }
+      int ch = scancode_to_ascii((u8)sc);
+      if (ch >= 0) {
+        /* fall through as character */
+        sc = -1;
+        if (ch == '\r')
+          ch = '\n';
+        if (ch == '\n') {
+          vga_putc('\n');
+          buf[len] = 0;
+          run_line(buf);
+          len = 0;
+          puts("> ");
+          continue;
+        }
+        if (ch == '\b') {
+          if (len) {
+            len--;
+            vga_putc('\b');
+          }
+          continue;
+        }
+        if (ch >= 32 && ch <= 126 && len + 1 < (int)sizeof(buf)) {
+          buf[len++] = (char)ch;
+          vga_putc((char)ch);
+        }
+        continue;
+      }
+      continue;
+    }
+
+    int c = serial_getc();
     if (c < 0) {
-      __asm__ volatile("hlt"); /* timer preempts → blink runs */
+      __asm__ volatile("hlt");
       continue;
     }
     if (c == '\r')
       c = '\n';
-
     if (c == '\n') {
       vga_putc('\n');
       buf[len] = 0;
@@ -710,7 +836,7 @@ static void shell(void) {
       puts("> ");
       continue;
     }
-    if (c == '\b') {
+    if (c == '\b' || c == 127) {
       if (len) {
         len--;
         vga_putc('\b');
@@ -810,7 +936,7 @@ void kmain(void) {
   gfx_clear(0);
   ui_demo();
   puts("Diskus C\n");
-  puts("P15 ui\n");
+  puts("P16 mouse\n");
   paging_init();
   puts("paging on\n");
   gdt_tss_init();
@@ -820,6 +946,7 @@ void kmain(void) {
     idt_set((u8)i, 0, 0x08, 0);
   idt_set(32, (u32)irq0_stub, 0x08, 0x8E);
   idt_set(33, (u32)irq1_stub, 0x08, 0x8E);
+  idt_set(44, (u32)irq12_stub, 0x08, 0x8E); /* IRQ12 */
   idt_set(0x80, (u32)syscall_stub, 0x08, 0xEE);
   idtp.limit = (u16)(256 * sizeof(struct idt_entry) - 1);
   idtp.base = (u32)IDT_MEM;
@@ -827,6 +954,12 @@ void kmain(void) {
   pic_remap();
   pit_init(TIMER_HZ);
   ticks = 0;
+  if (mouse_init() == 0) {
+    puts("mouse on\n");
+    mouse_cursor_redraw();
+  } else {
+    puts("mouse fail\n");
+  }
   irq_sti();
   tasks_init();
   ramfs_init();

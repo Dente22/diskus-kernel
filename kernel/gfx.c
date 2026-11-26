@@ -42,14 +42,23 @@ void gfx_set_cursor(u32 col, u32 row) {
   cur_row = row;
 }
 
-static void gfx_draw_glyph(int x, int y, char ch, u8 fg) {
+void gfx_get_cursor(u32 *col, u32 *row) {
+  if (col)
+    *col = cur_col;
+  if (row)
+    *row = cur_row;
+}
+
+static void gfx_draw_glyph(int x, int y, char ch, u8 fg, u8 bg) {
   if (ch < 32 || ch > 127)
     ch = '?';
+  gfx_fill_rect(x, y, 8, 8, bg);
   const u8 *g = font8[ch - 32];
   for (int row = 0; row < 8; row++) {
     u8 bits = g[row];
     for (int col = 0; col < 8; col++) {
-      if (bits & (0x80 >> col))
+      /* font bytes: bit0 = leftmost pixel */
+      if (bits & (1u << col))
         gfx_putpixel(x + col, y + row, fg);
     }
   }
@@ -62,7 +71,7 @@ void gfx_clear_text(void) {
   cur_row = GFX_TEXT_ROW0;
 }
 
-void gfx_putc(char c, u8 fg) {
+void gfx_putc_bg(char c, u8 fg, u8 bg) {
   if (c == '\n') {
     cur_col = 0;
     cur_row++;
@@ -73,7 +82,7 @@ void gfx_putc(char c, u8 fg) {
   if (c == '\b') {
     if (cur_col) {
       cur_col--;
-      gfx_fill_rect((int)(cur_col * 8), (int)(cur_row * 8), 8, 8, 0);
+      gfx_fill_rect((int)(cur_col * 8), (int)(cur_row * 8), 8, 8, bg);
     }
     return;
   }
@@ -85,14 +94,18 @@ void gfx_putc(char c, u8 fg) {
     if (cur_row >= ROWS)
       gfx_clear_text();
   }
-  gfx_draw_glyph((int)(cur_col * 8), (int)(cur_row * 8), c, fg);
+  gfx_draw_glyph((int)(cur_col * 8), (int)(cur_row * 8), c, fg, bg);
   cur_col++;
 }
 
-void gfx_puts(const char *s, u8 fg) {
+void gfx_putc(char c, u8 fg) { gfx_putc_bg(c, fg, 0); }
+
+void gfx_puts_bg(const char *s, u8 fg, u8 bg) {
   while (*s)
-    gfx_putc(*s++, fg);
+    gfx_putc_bg(*s++, fg, bg);
 }
+
+void gfx_puts(const char *s, u8 fg) { gfx_puts_bg(s, fg, 0); }
 
 void gfx_demo(void) {
   /* compact strip in rows 0..7 (y 0..63) — text starts at GFX_TEXT_ROW0 */

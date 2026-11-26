@@ -1,7 +1,8 @@
-; Diskus — IRQ0/IRQ1, int 0x80 syscall, lidt, yield (iret-frame)
+; Diskus — IRQ0/IRQ1/IRQ12, int 0x80 syscall, lidt, yield (iret-frame)
 BITS 32
 GLOBAL irq0_stub
 GLOBAL irq1_stub
+GLOBAL irq12_stub
 GLOBAL syscall_stub
 GLOBAL load_idt
 GLOBAL irq_sti
@@ -10,6 +11,7 @@ GLOBAL yield
 GLOBAL exit_current_task
 EXTERN timer_handler
 EXTERN kbd_irq_handler
+EXTERN mouse_irq_handler
 EXTERN schedule_switch
 EXTERN schedule_after_exit
 EXTERN syscall_dispatch
@@ -44,6 +46,18 @@ irq1_stub:
     mov ds, ax
     call kbd_irq_handler
     mov al, 0x20
+    out 0x20, al
+    popa
+    iret
+
+; IRQ12 mouse (slave) — EOI slave then master
+irq12_stub:
+    pusha
+    mov ax, 0x10
+    mov ds, ax
+    call mouse_irq_handler
+    mov al, 0x20
+    out 0xA0, al
     out 0x20, al
     popa
     iret

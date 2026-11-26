@@ -103,8 +103,12 @@ $uiO = Join-Path $Out 'ui.o'
 & $zig cc @cflags -c (Join-Path $Kernel 'ui.c') -o $uiO
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$mouseO = Join-Path $Out 'mouse.o'
+& $zig cc @cflags -c (Join-Path $Kernel 'mouse.c') -o $mouseO
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $kernelElf = Join-Path $Out 'kernel.elf'
-$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO, $pagingO, $gfxO, $uiO)
+$objs = @($entryO, $idtO, $userlandO, $mainO, $ramfsO, $diskO, $pagingO, $gfxO, $uiO, $mouseO)
 $lld = Join-Path (Split-Path $zig) 'lld.exe'
 if (-not (Test-Path $lld)) {
     $lld = Get-ChildItem (Split-Path $zig) -Filter 'lld.exe' -Recurse -ErrorAction SilentlyContinue |
