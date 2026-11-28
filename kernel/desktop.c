@@ -1,4 +1,4 @@
-/* Diskus P18 — multi-window desktop, z-order, close */
+/* Diskus P19 — multi-window + dirty-rect drag */
 #include "desktop.h"
 #include "gfx.h"
 #include "ui.h"
@@ -20,17 +20,19 @@ struct win {
   char title[8];
 };
 
-/* Fixed RAM — objcopy drops .bss; keep state inside loaded pad like main.c tables */
 #define WINS ((struct win *)0x00068000)
 #define ZORDER ((u8 *)0x00068100)
-#define DSTATE ((u8 *)0x00068110) /* [0]=drag_id+1, [1]=prev_left, [2]=btn_yes, [3]=btn_no, [4]=grab_dx lo... */
-/* keep grab in ints at 0x68120 */
+#define DSTATE ((u8 *)0x00068110)
 #define GRAB_DX (*(int *)0x00068120)
 #define GRAB_DY (*(int *)0x00068124)
 #define DRAG_ID (*(int *)0x00068128)
 
 static int in_rect(int x, int y, int rx, int ry, int rw, int rh) {
   return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
+}
+
+static int rects_overlap(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
 static void clamp_win(struct win *w) {
@@ -45,6 +47,38 @@ static void clamp_win(struct win *w) {
     w->y = max_y - w->h;
   if (w->y < 0)
     w->y = 0;
+}
+
+static void wallpaper_rect(int x, int y, int w, int h) {
+  int desk_h = GFX_TEXT_ROW0 * 8;
+  if (x < 0) {
+    w += x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    y = 0;
+  }
+  if (x + w > GFX_W)
+    w = GFX_W - x;
+  if (y + h > desk_h)
+    h = desk_h - y;
+  if (w <= 0 || h <= 0)
+    return;
+  /* stripe pattern matching full desktop_draw */
+  gfx_fill_rect(x, y, w, h, 1);
+  for (int sy = (y / 20) * 20; sy < y + h; sy += 20) {
+    int ry = sy;
+    int rh = 10;
+    if (ry < y) {
+      rh -= (y - ry);
+      ry = y;
+    }
+    if (ry + rh > y + h)
+      rh = y + h - ry;
+    if (rh > 0)
+      gfx_fill_rect(x, ry, w, rh, 2);
+  }
 }
 
 static void raise_win(int id) {
@@ -131,13 +165,46 @@ static void draw_one(struct win *w, int focused) {
   }
 }
 
+/* Move window with dirty-rect: wallpaper old area, redraw overlaps, paint window. */
+static void desktop_move_dirty(int id, int nx, int ny) {
+  struct win *w = &WINS[id];
+  int ox = w->x, oy = w->y, ow = w->w, oh = w->h;
+  u32 save_c, save_r;
+
+  w->x = nx;
+  w->y = ny;
+  clamp_win(w);
+  if (w->x == ox && w->y == oy)
+    return;
+
+  gfx_get_cursor(&save_c, &save_r);
+
+  wallpaper_rect(ox, oy, ow, oh);
+
+  /* other windows intersecting old or new rect, bottom → top */
+  for (int i = NWIN - 1; i >= 0; i--) {
+    int oid = (int)ZORDER[i];
+    if (oid == id || !WINS[oid].alive)
+      continue;
+    struct win *o = &WINS[oid];
+    if (rects_overlap(ox, oy, ow, oh, o->x, o->y, o->w, o->h) ||
+        rects_overlap(w->x, w->y, w->w, w->h, o->x, o->y, o->w, o->h))
+      draw_one(o, 0);
+  }
+
+  draw_one(w, ZORDER[0] == (u8)id);
+
+  if (save_r < (u32)GFX_TEXT_ROW0)
+    gfx_set_cursor(0, GFX_TEXT_ROW0);
+  else
+    gfx_set_cursor(save_c, save_r);
+}
+
 void desktop_draw(void) {
   u32 save_c, save_r;
   gfx_get_cursor(&save_c, &save_r);
 
-  gfx_fill_rect(0, 0, GFX_W, GFX_TEXT_ROW0 * 8, 1);
-  for (int y = 0; y < GFX_TEXT_ROW0 * 8; y += 20)
-    gfx_fill_rect(0, y, GFX_W, 10, 2);
+  wallpaper_rect(0, 0, GFX_W, GFX_TEXT_ROW0 * 8);
 
   for (int i = NWIN - 1; i >= 0; i--) {
     int id = (int)ZORDER[i];
@@ -202,10 +269,7 @@ void desktop_nudge_win(int dx, int dy) {
   int id = topmost_alive();
   if (id < 0)
     return;
-  WINS[id].x += dx;
-  WINS[id].y += dy;
-  clamp_win(&WINS[id]);
-  desktop_draw();
+  desktop_move_dirty(id, WINS[id].x + dx, WINS[id].y + dy);
 }
 
 void desktop_pointer(int x, int y, u8 buttons) {
@@ -227,7 +291,7 @@ void desktop_pointer(int x, int y, u8 buttons) {
         DRAG_ID = id;
         GRAB_DX = x - w->x;
         GRAB_DY = y - w->y;
-        desktop_draw();
+        desktop_draw(); /* raise chrome */
       } else if (w->kind == KIND_APP) {
         int by = w->y + TITLE_H + 24;
         if (in_rect(x, y, w->x + 8, by, BTN_W, BTN_H))
@@ -241,15 +305,7 @@ void desktop_pointer(int x, int y, u8 buttons) {
       }
     }
   } else if (left && DRAG_ID >= 0) {
-    struct win *w = &WINS[DRAG_ID];
-    int nx = x - GRAB_DX;
-    int ny = y - GRAB_DY;
-    if (nx != w->x || ny != w->y) {
-      w->x = nx;
-      w->y = ny;
-      clamp_win(w);
-      desktop_draw();
-    }
+    desktop_move_dirty(DRAG_ID, x - GRAB_DX, y - GRAB_DY);
   } else if (!left && prev_left) {
     DRAG_ID = -1;
   }

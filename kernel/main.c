@@ -1,4 +1,4 @@
-/* Diskus P18 — multi-window desktop + mouse */
+/* Diskus P19 — dirty-rect window drag + mouse */
 #include "desktop.h"
 #include "disk.h"
 #include "gfx.h"
@@ -520,7 +520,7 @@ static void cmd_help(void) {
 }
 
 static void cmd_about(void) {
-  puts("Diskus kernel P18 - multi-window desktop\n");
+  puts("Diskus kernel P19 - dirty-rect drag\n");
 }
 
 static void cmd_ui(const char *args) {
@@ -975,9 +975,8 @@ static void tasks_init(void) {
 void kmain(void) {
   gfx_clear(0);
   puts("Diskus C\n");
-  puts("P18 windows\n");
+  puts("P19 drag\n");
   desktop_init();
-  puts("init ok\n");
   desktop_draw();
   puts("desktop on\n");
   paging_init();

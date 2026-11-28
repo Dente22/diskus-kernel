@@ -23,12 +23,12 @@ if [[ "${1:-}" == "--smoke" ]]; then
   sleep 0.3
   TEXT="$(cat "$LOG" 2>/dev/null || true)"
   printf '%s\n' "$TEXT"
-  if echo "$TEXT" | grep -q 'P18' && echo "$TEXT" | grep -q 'paging on' \
+  if echo "$TEXT" | grep -q 'P19' && echo "$TEXT" | grep -q 'paging on' \
     && echo "$TEXT" | grep -q 'spawned' && echo "$TEXT" | grep -q 'user done'; then
     echo 'SMOKE OK'
     exit 0
   fi
-  echo "SMOKE FAIL - no P18 windows on serial. Got: $TEXT" >&2
+  echo "SMOKE FAIL - no P19 drag on serial. Got: $TEXT" >&2
   exit 1
 fi
 
