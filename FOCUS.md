@@ -8,7 +8,7 @@
 - [x] Drag / `win l|r|u|d` через partial redraw
 - [x] Full redraw только для raise/close/кнопок
 - [x] LEARN.md P19
-- [ ] WSL smoke → «ок» → push
+- [x] WSL smoke → push (`cf7bc7c`)
 
 ## Закрыто
 - P0–P18, VM — ✅
